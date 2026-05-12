@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Utility Energy Downloader</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="panel">
+      <header>
+        <h1>Energy Usage</h1>
+        <p id="status">Open the utility energy usage page.</p>
+      </header>
+
+      <section class="date-grid" aria-label="Download range">
+        <label>
+          <span>Start</span>
+          <input id="start-date" type="date">
+        </label>
+        <label>
+          <span>End</span>
+          <input id="end-date" type="date">
+        </label>
+      </section>
+
+      <section class="progress" aria-label="Download progress">
+        <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="progress-detail">
+          <span id="progress-count">0 of 0 days</span>
+          <span id="eta">-</span>
+        </div>
+        <div class="progress-row">
+          <span>Days saved</span>
+          <strong id="days-saved">0</strong>
+        </div>
+        <div class="progress-row">
+          <span>Intervals</span>
+          <strong id="rows-saved">0</strong>
+        </div>
+        <div class="progress-row">
+          <span>Current</span>
+          <strong id="current-day">-</strong>
+        </div>
+      </section>
+
+      <section class="actions" aria-label="Download controls">
+        <button id="start">Start</button>
+        <button id="resume">Resume</button>
+        <button id="pause">Pause</button>
+      </section>
+
+      <section class="actions secondary" aria-label="Data controls">
+        <button id="open-utility">Open Utility</button>
+        <button id="export-csv">CSV</button>
+        <button id="clear-data">Clear</button>
+      </section>
+
+      <section class="bridge" aria-label="TOU analyzer sharing">
+        <div>
+          <h2>TOU analyzer sharing</h2>
+          <p id="bridge-status">No analyzer request is waiting.</p>
+        </div>
+        <div class="actions bridge-actions">
+          <button id="approve-share">Approve</button>
+          <button id="decline-share">Decline</button>
+        </div>
+      </section>
+
+      <p id="error" class="error" hidden></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

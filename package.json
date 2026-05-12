@@ -1,0 +1,12 @@
+{
+  "name": "utility-energy-downloader",
+  "version": "0.1.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "description": "Local-only Chrome extension for downloading meter usage time-series data from a supported electric utility account.",
+  "scripts": {
+    "generate-icons": "node scripts/generate-icons.mjs",
+    "check": "node --check src/bridge.js && node --check src/content.js && node --check src/page-hook.js && node --check src/popup.js && node --check src/service-worker.js && node --check src/time.js && node test/time.test.js && node test/page-hook.test.js && node test/bridge.test.js",
+    "list-source": "find manifest.json src test icons scripts README.md PRIVACY.md LICENSE.md package.json .github .gitignore -type f | sort"
+  }
+}
