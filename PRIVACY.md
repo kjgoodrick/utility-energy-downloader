@@ -2,6 +2,8 @@
 
 Utility Energy Downloader is designed to run locally in the user's browser.
 
+Use this extension only with your own authorized utility account.
+
 ## Data collected by the extension
 
 The extension stores meter usage interval rows captured from the user's logged-in electric utility energy usage page.
@@ -38,7 +40,9 @@ The `unlimitedStorage` permission is used only so multi-year usage downloads can
 
 Because the extension automates the user's existing authenticated utility browser session, the supported utility site receives the normal authenticated page and API requests needed to load usage data.
 
-Exports are generated locally in the browser as CSV files. The TOU analyzer can import the same sanitized CSV through the extension bridge only after the user approves the pending request in the extension popup.
+Exports are generated locally in the browser as CSV files. The Time-of-Use Rate Analyzer, available at `https://offpeakadvisor.com`, can import the same sanitized CSV through the extension bridge only after the user approves the pending request in the extension popup. The shared CSV contains the local timestamp, read date, read time, read time occurrence, interval index, and usage in kWh. No credentials, cookies, authentication tokens, billing PDFs, payment information, account numbers, or telemetry are shared by this bridge.
+
+The extension limits use of user data to its single purpose: downloading, locally storing, exporting, and user-approved sharing of the user's own energy interval data for personal energy analysis. The use of information received from Google APIs adheres to the Chrome Web Store User Data Policy, including the Limited Use requirements.
 
 ## Site access
 

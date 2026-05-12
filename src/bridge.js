@@ -9,12 +9,6 @@
   const CSV_HEADERS = ["timestamp_local", "interval_index", "read_date", "read_time", "read_time_occurrence", "usage_kwh"];
   const GRANT_TTL_MS = 15 * 60 * 1000;
   const ALLOWED_ORIGINS = new Set([
-    "http://localhost",
-    "http://localhost:5173",
-    "http://localhost:4173",
-    "http://127.0.0.1",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:4173",
     "https://offpeakadvisor.com"
   ]);
 

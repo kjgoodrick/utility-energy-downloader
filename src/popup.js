@@ -110,7 +110,7 @@
     elements.approveShare.disabled = !pending;
     elements.declineShare.disabled = !pending;
     if (pending) {
-      elements.bridgeStatus.textContent = `${pending.origin} is requesting ${pending.rowCount || 0} saved intervals. Approve only if this is the TOU analyzer site you opened.`;
+      elements.bridgeStatus.textContent = `Share locally stored energy interval CSV with the Time-of-Use Rate Analyzer at https://offpeakadvisor.com. This request is from ${pending.origin} for ${pending.rowCount || 0} saved intervals.`;
     } else if (status?.rowCount && status?.file) {
       elements.bridgeStatus.textContent = `${status.rowCount} saved intervals are available as ${status.file.name}. No analyzer request is waiting.`;
     } else {

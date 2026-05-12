@@ -38,7 +38,7 @@ function fakeChrome(seed = {}) {
   };
 }
 
-assert.equal(originAllowed("http://localhost:5173"), true);
+assert.equal(originAllowed("http://localhost:5173"), false);
 assert.equal(originAllowed("https://offpeakadvisor.com"), true);
 assert.equal(originAllowed("https://attacker.example"), false);
 assert.equal(csvValue('with "quotes", comma\nnewline'), '"with ""quotes"", comma\nnewline"');
@@ -92,10 +92,10 @@ const chromeApi = fakeChrome({
 
   const forbidden = await handleExternalMessage(
     chromeApi,
-    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER" },
+    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
     { origin: "http://localhost:5173" }
   );
-  assert.equal(forbidden.status, "unsupported_format");
+  assert.equal(forbidden.status, "forbidden");
 
   const attacker = await handleExternalMessage(
     chromeApi,
@@ -107,19 +107,19 @@ const chromeApi = fakeChrome({
   const pending = await handleExternalMessage(
     chromeApi,
     { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
-    { origin: "http://localhost:5173" }
+    { origin: "https://offpeakadvisor.com" }
   );
   assert.equal(pending.status, "approval_required");
-  assert.equal(chromeApi.state[PENDING_SHARE_KEY].origin, "http://localhost:5173");
+  assert.equal(chromeApi.state[PENDING_SHARE_KEY].origin, "https://offpeakadvisor.com");
 
   const approved = await handleRuntimeMessage(chromeApi, { type: "ENERGY_BRIDGE_APPROVE" });
   assert.equal(approved.status, "approved");
-  assert.equal(Boolean(chromeApi.state[SHARE_GRANTS_KEY]["http://localhost:5173"]), true);
+  assert.equal(Boolean(chromeApi.state[SHARE_GRANTS_KEY]["https://offpeakadvisor.com"]), true);
 
   const shared = await handleExternalMessage(
     chromeApi,
     { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
-    { origin: "http://localhost:5173" }
+    { origin: "https://offpeakadvisor.com" }
   );
   assert.equal(shared.ok, true);
   assert.equal(shared.format, CSV_FORMAT);
