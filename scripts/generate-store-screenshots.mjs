@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
-const outputDir = resolve(process.env.STORE_SCREENSHOT_DIR || join(repoRoot, "release", "chrome-web-store", "screenshots"));
+const outputDirs = process.env.STORE_SCREENSHOT_DIR
+  ? [resolve(process.env.STORE_SCREENSHOT_DIR)]
+  : [
+      join(repoRoot, "docs", "screenshots"),
+      join(repoRoot, "release", "chrome-web-store", "screenshots")
+    ];
 const width = Number(process.env.STORE_SCREENSHOT_WIDTH || 1280);
 const height = Number(process.env.STORE_SCREENSHOT_HEIGHT || 800);
 
@@ -21,8 +26,8 @@ const scenarios = [
   {
     id: "01-ready-local-download",
     eyebrow: "Local utility session",
-    title: "Download interval usage without sharing credentials",
-    copy: "The extension works from the logged-in energy usage page and keeps usage data in local browser storage.",
+    title: "Download detailed energy usage",
+    copy: "The extension works from the logged-in utility page and keeps your usage data in local browser storage.",
     accent: "#4e79a7",
     utilityDate: "May 12, 2026",
     usage: "31.8 kWh",
@@ -39,18 +44,21 @@ const scenarios = [
       "#bridge-status": "1,344 saved intervals are available as energy-usage-timeseries.csv. No analyzer request is waiting.",
       "#progress-fill": { style: { width: "4%" } },
       ".progress-bar": { attributes: { "aria-valuenow": "4" } },
-      "#resume": { properties: { disabled: true } },
       "#pause": { properties: { disabled: false } },
-      "#export-csv": { properties: { disabled: false } },
-      "#approve-share": { properties: { disabled: true } },
-      "#decline-share": { properties: { disabled: true } }
+      "#start": { properties: { hidden: true } },
+      "#resume": { properties: { hidden: true } },
+      "#export-csv": { properties: { hidden: true } },
+      "#clear-data": { properties: { hidden: true } },
+      "#approve-share": { properties: { hidden: true } },
+      "#decline-share": { properties: { hidden: true } },
+      ".bridge": { properties: { hidden: true } }
     },
     badges: ["No password access", "Local storage", "User-controlled"]
   },
   {
     id: "02-resumable-progress",
     eyebrow: "Resumable capture",
-    title: "Progress is saved one day at a time",
+    title: "Pause and resume long downloads",
     copy: "Long date ranges can pause and resume. Completed days stay saved even if the utility page refreshes.",
     accent: "#5f8f5f",
     utilityDate: "Nov 04, 2025",
@@ -68,19 +76,22 @@ const scenarios = [
       "#bridge-status": "18,912 saved intervals are available as energy-usage-timeseries.csv. No analyzer request is waiting.",
       "#progress-fill": { style: { width: "54%" } },
       ".progress-bar": { attributes: { "aria-valuenow": "54" } },
-      "#resume": { properties: { disabled: true } },
       "#pause": { properties: { disabled: false } },
-      "#export-csv": { properties: { disabled: false } },
-      "#approve-share": { properties: { disabled: true } },
-      "#decline-share": { properties: { disabled: true } }
+      "#start": { properties: { hidden: true } },
+      "#resume": { properties: { hidden: true } },
+      "#export-csv": { properties: { hidden: true } },
+      "#clear-data": { properties: { hidden: true } },
+      "#approve-share": { properties: { hidden: true } },
+      "#decline-share": { properties: { hidden: true } },
+      ".bridge": { properties: { hidden: true } }
     },
     badges: ["Pause anytime", "Resume later", "Daily checkpoints"]
   },
   {
     id: "03-csv-export",
     eyebrow: "CSV export",
-    title: "Create a clean interval CSV for your own analysis",
-    copy: "Exported files contain interval timestamps and usage values, ready for spreadsheets or rate comparisons.",
+    title: "Export a clean usage CSV",
+    copy: "Exported files contain detailed timestamps and usage values, ready for spreadsheets or rate comparisons.",
     accent: "#c9933a",
     utilityDate: "Jan 18, 2026",
     usage: "42.1 kWh",
@@ -97,19 +108,22 @@ const scenarios = [
       "#bridge-status": "35,088 saved intervals are available as energy-usage-timeseries.csv. No analyzer request is waiting.",
       "#progress-fill": { style: { width: "100%" } },
       ".progress-bar": { attributes: { "aria-valuenow": "100" } },
-      "#resume": { properties: { disabled: true } },
-      "#pause": { properties: { disabled: true } },
       "#export-csv": { properties: { disabled: false } },
-      "#approve-share": { properties: { disabled: true } },
-      "#decline-share": { properties: { disabled: true } }
+      "#start": { properties: { hidden: true } },
+      "#resume": { properties: { hidden: true } },
+      "#pause": { properties: { hidden: true } },
+      "#clear-data": { properties: { hidden: true } },
+      "#approve-share": { properties: { hidden: true } },
+      "#decline-share": { properties: { hidden: true } },
+      ".bridge": { properties: { hidden: true } }
     },
     badges: ["Sanitized data", "Spreadsheet-ready", "Offline file"]
   },
   {
     id: "04-analyzer-approval",
     eyebrow: "Explicit approval",
-    title: "Share locally with the TOU analyzer only when you approve",
-    copy: "The analyzer request waits in the popup. Your interval data is handed to the site in your browser and still stays local.",
+    title: "Your data stays in your browser",
+    copy: "Approve sharing with the rate analyzer only when you choose. The handoff happens locally in your browser.",
     accent: "#7f6aa3",
     utilityDate: "Mar 21, 2026",
     usage: "28.4 kWh",
@@ -123,12 +137,14 @@ const scenarios = [
       "#days-saved": "731",
       "#rows-saved": "35,088",
       "#current-day": "-",
-      "#bridge-status": "Share locally with offpeakadvisor.com in this browser. Data stays local; no servers receive it. Request: 35,088 saved intervals.",
+      "#bridge-status": "Share locally with offpeakadvisor.com in this browser. Data stays local; no servers receive it. Request: 35,088 saved data points.",
       "#progress-fill": { style: { width: "100%" } },
       ".progress-bar": { attributes: { "aria-valuenow": "100" } },
-      "#resume": { properties: { disabled: true } },
-      "#pause": { properties: { disabled: true } },
-      "#export-csv": { properties: { disabled: false } },
+      "#start": { properties: { hidden: true } },
+      "#resume": { properties: { hidden: true } },
+      "#pause": { properties: { hidden: true } },
+      "#export-csv": { properties: { hidden: true } },
+      "#clear-data": { properties: { hidden: true } },
       "#approve-share": { properties: { disabled: false } },
       "#decline-share": { properties: { disabled: false } }
     },
@@ -136,7 +152,9 @@ const scenarios = [
   }
 ];
 
-mkdirSync(outputDir, { recursive: true });
+for (const outputDir of outputDirs) {
+  mkdirSync(outputDir, { recursive: true });
+}
 
 const browser = await launchBrowser();
 try {
@@ -147,12 +165,13 @@ try {
       colorScheme: "light"
     });
     await page.setContent(renderScenario(scenario), { waitUntil: "load" });
-    await page.screenshot({
-      path: join(outputDir, `${scenario.id}.png`),
-      fullPage: false
-    });
+    const screenshot = await page.screenshot({ fullPage: false, omitBackground: false });
     await page.close();
-    console.log(`Wrote ${join(outputDir, `${scenario.id}.png`)}`);
+    for (const outputDir of outputDirs) {
+      const outputPath = join(outputDir, `${scenario.id}.png`);
+      writeFileSync(outputPath, screenshot);
+      console.log(`Wrote ${outputPath}`);
+    }
   }
 } finally {
   await browser.close();
@@ -415,13 +434,18 @@ function renderScenario(scenario) {
 
       ${scopedPopupCss}
 
+      .popup-doc [hidden] {
+        display: none !important;
+      }
+
       .popup-doc #open-utility {
         display: none;
       }
 
-      .popup-doc .actions.secondary {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      .popup-doc .actions {
+        grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
       }
+
     </style>
   </head>
   <body>
@@ -502,6 +526,9 @@ function applyState(state) {
     for (const [name, styleValue] of Object.entries(value.style || {})) {
       element.style[name] = styleValue;
     }
+  }
+  for (const label of document.querySelectorAll(".popup-doc .progress-row span")) {
+    if (label.textContent === "Intervals") label.textContent = "Data points";
   }
 }
 

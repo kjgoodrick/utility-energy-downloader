@@ -5,8 +5,9 @@
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Local-only Chrome extension for downloading meter usage time-series data from a supported electric utility account.",
   "scripts": {
-    "build:local": "npm run check && npm run screenshots:store",
+    "build:local": "npm run check && npm run screenshots:store && npm run promos:store",
     "generate-icons": "node scripts/generate-icons.mjs",
+    "promos:store": "node scripts/generate-store-promos.mjs",
     "screenshots:store": "node scripts/generate-store-screenshots.mjs",
     "check": "node --check src/bridge.js && node --check src/content.js && node --check src/page-hook.js && node --check src/popup.js && node --check src/service-worker.js && node --check src/time.js && node test/time.test.js && node test/page-hook.test.js && node test/bridge.test.js",
     "list-source": "find manifest.json src test icons scripts docs README.md PRIVACY.md EULA.md LICENSE.md package.json package-lock.json .github .gitignore -type f | sort"

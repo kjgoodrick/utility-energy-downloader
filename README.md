@@ -14,11 +14,11 @@ Use this extension only with your own authorized utility account.
 
 ![Utility Energy Downloader capturing usage data on a utility energy page](docs/screenshots/01-ready-local-download.png)
 
-The popup controls a local download from the utility energy usage page and stores captured interval data in the user's browser profile.
+The popup controls a local download from the utility energy usage page and stores captured usage data in the user's browser profile.
 
 ![Utility Energy Downloader approval prompt for local analyzer sharing](docs/screenshots/04-analyzer-approval.png)
 
-Sharing with the Time-of-Use Rate Analyzer requires explicit approval, and the data handoff stays local in the user's browser.
+Sharing with the rate analyzer requires explicit approval, and the data handoff stays local in the user's browser.
 
 ## Privacy model
 
@@ -40,15 +40,15 @@ Sharing with the Time-of-Use Rate Analyzer requires explicit approval, and the d
 5. Open the supported utility's energy usage page and log in normally.
 6. Open the extension popup and start a download.
 
-## Local store screenshots
+## Local store artwork
 
-Generate local Chrome Web Store screenshots with:
+Generate local Chrome Web Store screenshots and promo tiles with:
 
 ```sh
-npm run screenshots:store
+npm run build:local
 ```
 
-The screenshots are written to `release/chrome-web-store/screenshots/`, which is ignored because it is a local release artifact. `npm run build:local` runs the normal checks and then refreshes these screenshots. The generator uses Playwright's managed Chromium by default; run `npx playwright install chromium` if the browser has not been installed yet, or set `CHROME_BIN` to use a specific Chrome/Chromium executable.
+The generator writes committed README/source assets to `docs/screenshots/` and `docs/promo/`, and upload-ready Chrome Web Store copies to ignored `release/chrome-web-store/` paths. The Playwright scripts use managed Chromium by default; run `npx playwright install chromium` if the browser has not been installed yet, or set `CHROME_BIN` to use a specific Chrome/Chromium executable.
 
 ## How it works
 
