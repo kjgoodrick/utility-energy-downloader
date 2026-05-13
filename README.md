@@ -17,7 +17,8 @@ Use this extension only with your own authorized utility account.
 - It does not ask for, read, or transmit utility account credentials.
 - Usage interval rows are stored in Chrome's local extension storage.
 - Exports and approved Time-of-Use Rate Analyzer imports are generated locally as sanitized CSV.
-- The Time-of-Use Rate Analyzer at `https://offpeakadvisor.com` can receive the sanitized CSV only after the user approves the pending request in the extension popup.
+- The Time-of-Use Rate Analyzer at [offpeakadvisor.com](https://offpeakadvisor.com) can receive the sanitized CSV only after the user approves the pending request in the extension popup.
+- After approval, the analyzer keeps the imported CSV data in local browser storage for that site. The analyzer does not send the CSV, interval data, credentials, or telemetry to a backend service.
 - There is no backend service and no analytics.
 
 ## Development install
