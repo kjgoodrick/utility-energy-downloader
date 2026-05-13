@@ -30,6 +30,16 @@ Use this extension only with your own authorized utility account.
 5. Open the supported utility's energy usage page and log in normally.
 6. Open the extension popup and start a download.
 
+## Local store screenshots
+
+Generate local Chrome Web Store screenshots with:
+
+```sh
+npm run screenshots:store
+```
+
+The screenshots are written to `release/chrome-web-store/screenshots/`, which is ignored because it is a local release artifact. `npm run build:local` runs the normal checks and then refreshes these screenshots. The generator uses Playwright's managed Chromium by default; run `npx playwright install chromium` if the browser has not been installed yet, or set `CHROME_BIN` to use a specific Chrome/Chromium executable.
+
 ## How it works
 
 The extension injects `src/page-hook.js` into the energy usage page at document start. That hook wraps `fetch`, `XMLHttpRequest`, and JSON parsing, watches for usage time-series payloads, and sends only minimal interval fields (`readDate`, `readTime`, and `usage`) to the isolated content script.
