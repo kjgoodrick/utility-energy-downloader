@@ -10,6 +10,16 @@ Local-only Chrome extension for downloading meter usage time-series data from th
 
 Use this extension only with your own authorized utility account.
 
+## Preview
+
+![Utility Energy Downloader capturing usage data on a utility energy page](docs/screenshots/01-ready-local-download.png)
+
+The popup controls a local download from the utility energy usage page and stores captured interval data in the user's browser profile.
+
+![Utility Energy Downloader approval prompt for local analyzer sharing](docs/screenshots/04-analyzer-approval.png)
+
+Sharing with the Time-of-Use Rate Analyzer requires explicit approval, and the data handoff stays local in the user's browser.
+
 ## Privacy model
 
 - The extension runs only on the supported utility's post-login energy usage page.

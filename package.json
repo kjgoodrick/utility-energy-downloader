@@ -9,7 +9,7 @@
     "generate-icons": "node scripts/generate-icons.mjs",
     "screenshots:store": "node scripts/generate-store-screenshots.mjs",
     "check": "node --check src/bridge.js && node --check src/content.js && node --check src/page-hook.js && node --check src/popup.js && node --check src/service-worker.js && node --check src/time.js && node test/time.test.js && node test/page-hook.test.js && node test/bridge.test.js",
-    "list-source": "find manifest.json src test icons scripts README.md PRIVACY.md EULA.md LICENSE.md package.json package-lock.json .github .gitignore -type f | sort"
+    "list-source": "find manifest.json src test icons scripts docs README.md PRIVACY.md EULA.md LICENSE.md package.json package-lock.json .github .gitignore -type f | sort"
   },
   "devDependencies": {
     "playwright": "^1.60.0"
