@@ -25,7 +25,7 @@ Use this extension only with your own authorized utility account.
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
 3. Click **Load unpacked**.
-4. Select this `extension/chrome` directory.
+4. Select this repository directory.
 5. Open the supported utility's energy usage page and log in normally.
 6. Open the extension popup and start a download.
 
