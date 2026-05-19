@@ -13,7 +13,8 @@ const outputDirs = process.env.STORE_PROMO_DIR
       join(repoRoot, "docs", "promo"),
       join(repoRoot, "release", "chrome-web-store", "promo")
     ];
-const iconData = readFileSync(join(repoRoot, "icons", "icon128.png")).toString("base64");
+const brandMarkData = readFileSync(join(repoRoot, "docs", "store-mark.svg")).toString("base64");
+const brandMarkSrc = `data:image/svg+xml;base64,${brandMarkData}`;
 
 const tiles = [
   {
@@ -515,7 +516,7 @@ function renderTile(tile) {
     <main class="tile ${modeClass}">
       <section class="copy">
         <div class="brand">
-          <img alt="" src="data:image/png;base64,${iconData}">
+          <img alt="" src="${brandMarkSrc}">
           <span>Utility Energy Downloader</span>
         </div>
         <p class="eyebrow">${escapeHtml(tile.eyebrow)}</p>

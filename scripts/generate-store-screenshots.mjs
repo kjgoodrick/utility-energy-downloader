@@ -20,7 +20,8 @@ const popupHtml = readFileSync(join(repoRoot, "src", "popup.html"), "utf8");
 const popupCss = readFileSync(join(repoRoot, "src", "popup.css"), "utf8");
 const popupMarkup = extractPopupMarkup(popupHtml);
 const scopedPopupCss = scopeCss(removeDarkModeBlock(popupCss), ".popup-doc");
-const iconData = readFileSync(join(repoRoot, "icons", "icon128.png")).toString("base64");
+const brandMarkData = readFileSync(join(repoRoot, "docs", "store-mark.svg")).toString("base64");
+const brandMarkSrc = `data:image/svg+xml;base64,${brandMarkData}`;
 
 const scenarios = [
   {
@@ -452,7 +453,7 @@ function renderScenario(scenario) {
     <main class="stage">
       <section class="copy" aria-label="Store screenshot caption">
         <div class="brand">
-          <img alt="" src="data:image/png;base64,${iconData}">
+          <img alt="" src="${brandMarkSrc}">
           <span>Utility Energy Downloader</span>
         </div>
         <p class="eyebrow">${escapeHtml(scenario.eyebrow)}</p>
