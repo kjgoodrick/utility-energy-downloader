@@ -47,19 +47,27 @@
   };
 
   function todayIso() {
-    return new Date().toISOString().slice(0, 10);
+    return isoDate(new Date());
   }
 
   function daysAgoIso(count) {
     const date = new Date();
     date.setDate(date.getDate() - count);
-    return date.toISOString().slice(0, 10);
+    return isoDate(date);
+  }
+
+  function isoDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
   function defaultStartDate() {
-    const date = new Date(daysAgoIso(1));
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
     date.setFullYear(date.getFullYear() - 2);
-    return date.toISOString().slice(0, 10);
+    return isoDate(date);
   }
 
   function dayKey(day) {
@@ -965,7 +973,7 @@
           </div>
         </div>
         <div class="actions">
-          <button class="action start-button">Download</button>
+          <button class="action start-button">Start</button>
           <button class="action secondary resume-button">Resume</button>
           <button class="action secondary pause-button">Pause</button>
           <button class="action secondary export-button">CSV</button>
@@ -1009,6 +1017,14 @@
 
     startInput.value = defaultStartDate();
     endInput.value = daysAgoIso(1);
+
+    function applyDateLimits() {
+      const maxDate = daysAgoIso(1);
+      startInput.max = maxDate;
+      endInput.max = maxDate;
+      if (startInput.value > maxDate) startInput.value = maxDate;
+      if (endInput.value > maxDate) endInput.value = maxDate;
+    }
 
     function setError(message) {
       error.textContent = message || "";
@@ -1097,6 +1113,10 @@
     }
 
     startButton.addEventListener("click", () => run(() => startDownload(startInput.value, endInput.value)));
+    startInput.addEventListener("input", applyDateLimits);
+    startInput.addEventListener("change", applyDateLimits);
+    endInput.addEventListener("input", applyDateLimits);
+    endInput.addEventListener("change", applyDateLimits);
     resumeButton.addEventListener("click", () => run(resumeDownload));
     pauseButton.addEventListener("click", () => run(pauseDownload));
     exportButton.addEventListener("click", () => run(async () => {
@@ -1110,6 +1130,7 @@
       await resumeDownload();
     }));
 
+    applyDateLimits();
     refresh();
     window.setInterval(refresh, 2_500);
   }

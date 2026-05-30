@@ -29,11 +29,15 @@
   let stickyError = false;
 
   function isoDate(date) {
-    return date.toISOString().slice(0, 10);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
   function defaultStartDate() {
-    const date = new Date(defaultEndDate());
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
     date.setFullYear(date.getFullYear() - 2);
     return isoDate(date);
   }
@@ -42,6 +46,14 @@
     const date = new Date();
     date.setDate(date.getDate() - 1);
     return isoDate(date);
+  }
+
+  function applyDateLimits() {
+    const maxDate = defaultEndDate();
+    elements.startDate.max = maxDate;
+    elements.endDate.max = maxDate;
+    if (elements.startDate.value > maxDate) elements.startDate.value = maxDate;
+    if (elements.endDate.value > maxDate) elements.endDate.value = maxDate;
   }
 
   function energyUsageUrl() {
@@ -195,6 +207,10 @@
   }
 
   elements.errorDismiss.addEventListener("click", () => setError(""));
+  elements.startDate.addEventListener("input", applyDateLimits);
+  elements.startDate.addEventListener("change", applyDateLimits);
+  elements.endDate.addEventListener("input", applyDateLimits);
+  elements.endDate.addEventListener("change", applyDateLimits);
 
   elements.start.addEventListener("click", () => run(() => sendToActiveTab({
     type: "ENERGY_START",
@@ -235,8 +251,10 @@
     return null;
   }));
 
+  applyDateLimits();
   elements.startDate.value = defaultStartDate();
   elements.endDate.value = defaultEndDate();
+  applyDateLimits();
   refresh();
   setInterval(refresh, 2_500);
 })();
