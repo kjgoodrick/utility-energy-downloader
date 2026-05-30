@@ -147,6 +147,11 @@
     return MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1));
   }
 
+  function isExtensionContextInvalidated(error) {
+    const message = error?.message || String(error || "");
+    return message.includes("Extension context invalidated");
+  }
+
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
   }
@@ -1014,6 +1019,7 @@
     const noticeClose = shadow.querySelector(".notice-close");
     const noticeResume = shadow.querySelector(".notice-resume");
     let shownPauseNoticeKey = null;
+    let refreshTimer = null;
 
     startInput.value = defaultStartDate();
     endInput.value = daysAgoIso(1);
@@ -1098,8 +1104,22 @@
       }
     }
 
+    function stopForInvalidatedContext(caught) {
+      if (!isExtensionContextInvalidated(caught)) return false;
+      if (refreshTimer) window.clearInterval(refreshTimer);
+      activeRun = null;
+      setError("The extension was reloaded. Reload this utility page to reconnect.");
+      return true;
+    }
+
     async function refresh() {
-      render(await summarizeStoredData());
+      try {
+        render(await summarizeStoredData());
+      } catch (caught) {
+        if (!stopForInvalidatedContext(caught)) {
+          throw caught;
+        }
+      }
     }
 
     async function run(action) {
@@ -1108,8 +1128,14 @@
         await action();
         await refresh();
       } catch (caught) {
+        if (stopForInvalidatedContext(caught)) return;
         setError(caught.message || String(caught));
       }
+    }
+
+    function handleRefreshError(caught) {
+      if (stopForInvalidatedContext(caught)) return;
+      setError(caught.message || String(caught));
     }
 
     startButton.addEventListener("click", () => run(() => startDownload(startInput.value, endInput.value)));
@@ -1131,8 +1157,10 @@
     }));
 
     applyDateLimits();
-    refresh();
-    window.setInterval(refresh, 2_500);
+    refresh().catch(handleRefreshError);
+    refreshTimer = window.setInterval(() => {
+      refresh().catch(handleRefreshError);
+    }, 2_500);
   }
 
   async function runDownload(startDate, endDate) {
