@@ -16,13 +16,14 @@
   const MIN_DELAY_MS = 2_000;
   const MAX_DELAY_MS = 6_000;
   const PANEL_ID = "energy-usage-downloader-panel";
-  const { timestampLocal } = globalThis.energyUsageTime;
+  const exportApi = globalThis.energyUsageExport || createExportFallback();
   const {
     CSV_MIME,
     DAY_KEY_PREFIX,
     collectStoredRowsFromSnapshot,
     rowsToCsv
-  } = globalThis.energyUsageExport;
+  } = exportApi;
+  const timestampLocal = globalThis.energyUsageTime?.timestampLocal || fallbackTimestampLocal;
 
   let activeRun = null;
   // These separate "what happened in this page session" from older persisted
@@ -57,6 +58,67 @@
 
   function dayKey(day) {
     return `${DAY_KEY_PREFIX}${day}`;
+  }
+
+  function sanitizeExportRow(row) {
+    return {
+      timestamp_local: row?.timestamp_local ?? null,
+      interval_index: row?.interval_index ?? null,
+      read_date: row?.read_date_iso ?? row?.read_date ?? null,
+      read_time: row?.read_time ?? null,
+      read_time_occurrence: row?.read_time_occurrence ?? null,
+      usage_kwh: row?.usage_kwh ?? null
+    };
+  }
+
+  function csvValue(value) {
+    if (value === null || value === undefined) return "";
+    const text = String(value);
+    return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  }
+
+  function createExportFallback() {
+    const headers = ["timestamp_local", "interval_index", "read_date", "read_time", "read_time_occurrence", "usage_kwh"];
+    const dayPrefix = "energy.day.";
+    return {
+      CSV_MIME: "text/csv",
+      DAY_KEY_PREFIX: dayPrefix,
+      collectStoredRowsFromSnapshot(snapshot) {
+        return Object.entries(snapshot || {})
+          .filter(([key, value]) => key.startsWith(dayPrefix) && value?.status === "done")
+          .map(([, value]) => value)
+          .sort((a, b) => String(a.day).localeCompare(String(b.day)))
+          .flatMap(record => record.rows || [])
+          .map(sanitizeExportRow)
+          .filter(row => row.timestamp_local && row.usage_kwh !== null)
+          .sort((a, b) => String(a.timestamp_local).localeCompare(String(b.timestamp_local)));
+      },
+      rowsToCsv(rows) {
+        return [
+          headers.join(","),
+          ...rows.map(row => headers.map(header => csvValue(row[header])).join(","))
+        ].join("\n");
+      }
+    };
+  }
+
+  function fallbackTimestampLocal(readDateIso, readTime) {
+    if (!readDateIso || !readTime) return null;
+    const match = String(readTime).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+    if (!match) return null;
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const second = Number(match[3] || 0);
+    const meridiem = match[4]?.toUpperCase();
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || !Number.isInteger(second)) return null;
+    if (minute > 59 || second > 59) return null;
+    if (meridiem === "AM" && hour === 12) hour = 0;
+    if (meridiem === "PM" && hour < 12) hour += 12;
+    if (hour === 24 && minute === 0 && second === 0) {
+      return `${addDays(readDateIso, 1)}T00:00:00`;
+    }
+    if (hour < 0 || hour > 23) return null;
+    return `${readDateIso}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
   }
 
   function createJobId() {

@@ -253,6 +253,8 @@ button:disabled {
 
 .error {
   margin: 0;
+  display: grid;
+  gap: 8px;
   border: 1px solid var(--danger-line);
   border-radius: 6px;
   background: var(--danger-bg);
@@ -260,4 +262,17 @@ button:disabled {
   padding: 8px;
   font-size: 0.8rem;
   line-height: 1.35;
+}
+
+.error[hidden] {
+  display: none;
+}
+
+.error button {
+  justify-self: start;
+  min-height: 28px;
+  border-color: var(--danger-line);
+  background: transparent;
+  color: var(--danger-text);
+  padding: 4px 8px;
 }

@@ -4,6 +4,8 @@
   const elements = {
     status: document.querySelector("#status"),
     error: document.querySelector("#error"),
+    errorText: document.querySelector("#error-text"),
+    errorDismiss: document.querySelector("#error-dismiss"),
     startDate: document.querySelector("#start-date"),
     endDate: document.querySelector("#end-date"),
     progressBar: document.querySelector(".progress-bar"),
@@ -24,6 +26,7 @@
     approveShare: document.querySelector("#approve-share"),
     declineShare: document.querySelector("#decline-share")
   };
+  let stickyError = false;
 
   function isoDate(date) {
     return date.toISOString().slice(0, 10);
@@ -41,9 +44,10 @@
     return match.endsWith("*") ? match.slice(0, -1) : match;
   }
 
-  function setError(message) {
+  function setError(message, options = {}) {
+    stickyError = Boolean(message && options.sticky);
     elements.error.hidden = !message;
-    elements.error.textContent = message || "";
+    elements.errorText.textContent = message || "";
   }
 
   async function activeTab() {
@@ -56,7 +60,15 @@
     if (!tab?.id) {
       throw new Error("No active tab found.");
     }
-    const response = await chrome.tabs.sendMessage(tab.id, message);
+    let response;
+    try {
+      response = await chrome.tabs.sendMessage(tab.id, message);
+    } catch (error) {
+      if (isMissingContentScriptError(error)) {
+        throw new Error("The downloader is not active on this page. Reload the utility energy usage page, then try again.");
+      }
+      throw error;
+    }
     if (!response?.ok) {
       throw new Error(response?.error || "The utility page is not ready.");
     }
@@ -138,7 +150,7 @@
 
   async function refresh() {
     try {
-      setError("");
+      if (!stickyError) setError("");
       const [summary, bridge] = await Promise.all([
         sendToActiveTab({ type: "ENERGY_STATUS" }).catch(error => {
           elements.status.textContent = "Open the utility energy usage page and log in.";
@@ -154,7 +166,9 @@
       renderBridgeStatus(bridge);
     } catch (error) {
       elements.status.textContent = "Open the utility energy usage page and log in.";
-      setError(isMissingContentScriptError(error) ? "" : error.message);
+      if (!isMissingContentScriptError(error)) {
+        setError(error.message);
+      }
       renderStatus({ doneDays: 0, rows: 0, pageReady: false });
       sendToBackground({ type: "ENERGY_BRIDGE_STATUS" }).then(renderBridgeStatus).catch(() => {});
     }
@@ -166,9 +180,11 @@
       const summary = await action();
       if (summary) renderStatus(summary);
     } catch (error) {
-      setError(error.message);
+      setError(error.message, { sticky: true });
     }
   }
+
+  elements.errorDismiss.addEventListener("click", () => setError(""));
 
   elements.start.addEventListener("click", () => run(() => sendToActiveTab({
     type: "ENERGY_START",
