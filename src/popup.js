@@ -33,8 +33,14 @@
   }
 
   function defaultStartDate() {
-    const date = new Date();
+    const date = new Date(defaultEndDate());
     date.setFullYear(date.getFullYear() - 2);
+    return isoDate(date);
+  }
+
+  function defaultEndDate() {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
     return isoDate(date);
   }
 
@@ -119,7 +125,11 @@
       elements.status.textContent = "Ready on the utility energy usage page.";
     }
 
-    elements.resume.disabled = job?.status !== "paused";
+    const canResume = job?.status === "paused" || display.isInterrupted;
+    elements.start.hidden = display.isRunningNow || canResume;
+    elements.resume.hidden = !canResume;
+    elements.pause.hidden = !display.isRunningNow;
+    elements.resume.disabled = !canResume;
     elements.pause.disabled = !display.isRunningNow;
     elements.exportCsv.disabled = !summary?.rows;
   }
@@ -226,7 +236,7 @@
   }));
 
   elements.startDate.value = defaultStartDate();
-  elements.endDate.value = isoDate(new Date());
+  elements.endDate.value = defaultEndDate();
   refresh();
   setInterval(refresh, 2_500);
 })();

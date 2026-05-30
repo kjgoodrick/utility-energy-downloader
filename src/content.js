@@ -56,6 +56,12 @@
     return date.toISOString().slice(0, 10);
   }
 
+  function defaultStartDate() {
+    const date = new Date(daysAgoIso(1));
+    date.setFullYear(date.getFullYear() - 2);
+    return date.toISOString().slice(0, 10);
+  }
+
   function dayKey(day) {
     return `${DAY_KEY_PREFIX}${day}`;
   }
@@ -613,6 +619,18 @@
     };
   }
 
+  function saveDownload(filename, text, mime) {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename || `energy-usage-timeseries-${todayIso()}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+
   function ensureInlinePanel() {
     if (document.getElementById(PANEL_ID)) return;
     if (!location.pathname.includes("/secure/my-account/energy-usage")) return;
@@ -811,6 +829,10 @@
           gap: 6px;
         }
 
+        .actions:empty {
+          display: none;
+        }
+
         button.action {
           min-height: 30px;
           border: 1px solid var(--button-bg);
@@ -829,6 +851,10 @@
           border-color: var(--line);
           background: var(--panel);
           color: var(--text);
+        }
+
+        button.hidden {
+          display: none;
         }
 
         .error {
@@ -939,9 +965,10 @@
           </div>
         </div>
         <div class="actions">
-          <button class="action start-button">Start</button>
+          <button class="action start-button">Download</button>
           <button class="action secondary resume-button">Resume</button>
           <button class="action secondary pause-button">Pause</button>
+          <button class="action secondary export-button">CSV</button>
         </div>
         <div class="error hidden"></div>
       </section>
@@ -973,14 +1000,15 @@
     const startButton = shadow.querySelector(".start-button");
     const resumeButton = shadow.querySelector(".resume-button");
     const pauseButton = shadow.querySelector(".pause-button");
+    const exportButton = shadow.querySelector(".export-button");
     const noticeBackdrop = shadow.querySelector(".notice-backdrop");
     const noticeMessage = shadow.querySelector(".notice-message");
     const noticeClose = shadow.querySelector(".notice-close");
     const noticeResume = shadow.querySelector(".notice-resume");
     let shownPauseNoticeKey = null;
 
-    startInput.value = daysAgoIso(1);
-    endInput.value = todayIso();
+    startInput.value = defaultStartDate();
+    endInput.value = daysAgoIso(1);
 
     function setError(message) {
       error.textContent = message || "";
@@ -1025,8 +1053,14 @@
       progressBar.setAttribute("aria-valuenow", String(progress.percent || 0));
       progressCount.textContent = `${progress.completedDays || 0} of ${progress.totalDays || 0} days`;
       eta.textContent = progress.etaText || "-";
+      const canResume = job?.status === "paused" || display.isInterrupted;
+      startButton.classList.toggle("hidden", display.isRunningNow || canResume);
+      resumeButton.classList.toggle("hidden", !canResume);
+      pauseButton.classList.toggle("hidden", !display.isRunningNow);
+      exportButton.classList.toggle("hidden", !summary?.rows);
       pauseButton.disabled = !display.isRunningNow;
-      resumeButton.disabled = job?.status !== "paused";
+      resumeButton.disabled = !canResume;
+      exportButton.disabled = !summary?.rows;
 
       if (!summary?.pageReady) {
         status.textContent = "Open the energy usage page.";
@@ -1065,6 +1099,10 @@
     startButton.addEventListener("click", () => run(() => startDownload(startInput.value, endInput.value)));
     resumeButton.addEventListener("click", () => run(resumeDownload));
     pauseButton.addEventListener("click", () => run(pauseDownload));
+    exportButton.addEventListener("click", () => run(async () => {
+      const result = await exportData();
+      saveDownload(result.filename, result.text, result.mime);
+    }));
     shadow.querySelector(".collapse").addEventListener("click", () => host.remove());
     noticeClose.addEventListener("click", closePauseNotice);
     noticeResume.addEventListener("click", () => run(async () => {
@@ -1148,6 +1186,9 @@
   async function startDownload(startDate, endDate) {
     if (startDate > endDate) {
       throw new Error("Start date must be before end date.");
+    }
+    if (endDate >= todayIso()) {
+      throw new Error("End date must be before today. The utility does not provide complete data for the current day.");
     }
     runDownload(startDate, endDate);
     return summarizeStoredData();
