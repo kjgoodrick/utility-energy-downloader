@@ -6,7 +6,6 @@
   const STORAGE_META_KEY = "energy.meta";
   const PENDING_SHARE_KEY = "energy.share.pending";
   const SHARE_GRANTS_KEY = "energy.share.grants";
-  const DAY_KEY_PREFIX = "energy.day.";
   const DATE_INPUT_SELECTOR = 'input[placeholder="Show usage through :"]';
   const PERIOD_OPTION_LABEL = "One Day";
   const LOADING_SELECTOR = "#loading-component, .overlay";
@@ -18,6 +17,12 @@
   const MAX_DELAY_MS = 6_000;
   const PANEL_ID = "energy-usage-downloader-panel";
   const { timestampLocal } = globalThis.energyUsageTime;
+  const {
+    CSV_MIME,
+    DAY_KEY_PREFIX,
+    collectStoredRowsFromSnapshot,
+    rowsToCsv
+  } = globalThis.energyUsageExport;
 
   let activeRun = null;
   // These separate "what happened in this page session" from older persisted
@@ -532,38 +537,14 @@
     };
   }
 
-  function collectRowsFromStorageSnapshot(all) {
-    const dayRecords = Object.entries(all)
-      .filter(([key, value]) => key.startsWith(DAY_KEY_PREFIX) && value?.status === "done")
-      .map(([, value]) => value)
-      .sort((a, b) => a.day.localeCompare(b.day));
-
-    return dayRecords.flatMap(record => record.rows || [])
-      .sort((a, b) => String(a.timestamp_local).localeCompare(String(b.timestamp_local)));
-  }
-
-  function csvValue(value) {
-    if (value === null || value === undefined) return "";
-    const text = String(value);
-    return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-  }
-
-  function rowsToCsv(rows) {
-    const headers = ["timestamp_local", "interval_index", "read_date", "read_time", "read_time_occurrence", "usage_kwh"];
-    return [
-      headers.join(","),
-      ...rows.map(row => headers.map(header => csvValue(header === "read_date" ? row.read_date_iso ?? row.read_date : row[header])).join(","))
-    ].join("\n");
-  }
-
   async function exportData() {
     const all = await storage.get(null);
-    const rows = collectRowsFromStorageSnapshot(all);
+    const rows = collectStoredRowsFromSnapshot(all);
     if (!rows.length) {
       throw new Error("No saved usage data is available to export.");
     }
     return {
-      mime: "text/csv",
+      mime: CSV_MIME,
       extension: "csv",
       text: rowsToCsv(rows),
       filename: `energy-usage-timeseries-${todayIso()}.csv`
