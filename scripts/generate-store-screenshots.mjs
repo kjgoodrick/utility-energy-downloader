@@ -146,6 +146,7 @@ const scenarios = [
       "#pause": { properties: { hidden: true } },
       "#export-csv": { properties: { hidden: true } },
       "#clear-data": { properties: { hidden: true } },
+      ".bridge": { properties: { hidden: false } },
       "#approve-share": { properties: { disabled: false } },
       "#decline-share": { properties: { disabled: false } }
     },

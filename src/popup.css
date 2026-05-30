@@ -137,6 +137,10 @@ input {
   padding: 10px;
 }
 
+.bridge[hidden] {
+  display: none;
+}
+
 .bridge h2 {
   margin: 0;
   color: var(--heading);

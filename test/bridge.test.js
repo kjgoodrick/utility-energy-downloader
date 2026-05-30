@@ -104,6 +104,26 @@ const chromeApi = fakeChrome({
   );
   assert.equal(attacker.status, "forbidden");
 
+  const emptyChromeApi = fakeChrome();
+  const empty = await handleExternalMessage(
+    emptyChromeApi,
+    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
+    { origin: "https://offpeakadvisor.com" }
+  );
+  assert.equal(empty.status, "empty");
+  assert.equal(emptyChromeApi.state[PENDING_SHARE_KEY], undefined);
+
+  const stalePendingChromeApi = fakeChrome({
+    [PENDING_SHARE_KEY]: {
+      origin: "https://offpeakadvisor.com",
+      requestedAt: new Date().toISOString(),
+      rowCount: 0
+    }
+  });
+  const stalePendingStatus = await handleRuntimeMessage(stalePendingChromeApi, { type: "ENERGY_BRIDGE_STATUS" });
+  assert.equal(stalePendingStatus.pending, null);
+  assert.equal(stalePendingChromeApi.state[PENDING_SHARE_KEY], undefined);
+
   const pending = await handleExternalMessage(
     chromeApi,
     { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },

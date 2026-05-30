@@ -50,16 +50,15 @@
     return Boolean(grant?.approvedAt && now - Date.parse(grant.approvedAt) <= GRANT_TTL_MS);
   }
 
-  async function rememberPending(chromeApi, origin) {
-    const rows = await collectStoredRows(chromeApi);
+  async function rememberPending(chromeApi, origin, rowCount) {
     await chromeApi.storage.local.set({
       [PENDING_SHARE_KEY]: {
         origin,
         requestedAt: new Date().toISOString(),
-        rowCount: rows.length
+        rowCount
       }
     });
-    return rows.length;
+    return rowCount;
   }
 
   async function approvePendingShare(chromeApi) {
@@ -87,9 +86,16 @@
   async function bridgeStatus(chromeApi) {
     const values = await chromeApi.storage.local.get([PENDING_SHARE_KEY, SHARE_GRANTS_KEY]);
     const rows = await collectStoredRows(chromeApi);
+    let pending = values[PENDING_SHARE_KEY] || null;
+    if (pending && !rows.length) {
+      await chromeApi.storage.local.remove(PENDING_SHARE_KEY);
+      pending = null;
+    } else if (pending) {
+      pending = { ...pending, rowCount: rows.length };
+    }
     return {
       ok: true,
-      pending: values[PENDING_SHARE_KEY] || null,
+      pending,
       grants: values[SHARE_GRANTS_KEY] || {},
       rowCount: rows.length,
       file: rows.length
@@ -115,8 +121,13 @@
       return { ok: false, status: "forbidden", message: "This website is not allowed to request usage data." };
     }
 
+    const rows = await collectStoredRows(chromeApi);
+    if (!rows.length) {
+      return { ok: false, status: "empty", message: "No saved usage data is available." };
+    }
+
     if (!(await hasGrant(chromeApi, origin))) {
-      const rowCount = await rememberPending(chromeApi, origin);
+      const rowCount = await rememberPending(chromeApi, origin, rows.length);
       return {
         ok: false,
         status: "approval_required",
@@ -125,10 +136,6 @@
       };
     }
 
-    const rows = await collectStoredRows(chromeApi);
-    if (!rows.length) {
-      return { ok: false, status: "empty", message: "No saved usage data is available." };
-    }
     const exportedAt = new Date().toISOString();
     return {
       ok: true,

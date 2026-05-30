@@ -19,6 +19,7 @@
     openUtility: document.querySelector("#open-utility"),
     exportCsv: document.querySelector("#export-csv"),
     clearData: document.querySelector("#clear-data"),
+    bridge: document.querySelector("#bridge"),
     bridgeStatus: document.querySelector("#bridge-status"),
     approveShare: document.querySelector("#approve-share"),
     declineShare: document.querySelector("#decline-share")
@@ -66,6 +67,12 @@
     return chrome.runtime.sendMessage(message);
   }
 
+  function isMissingContentScriptError(error) {
+    const message = error?.message || String(error || "");
+    return message.includes("Could not establish connection")
+      || message.includes("Receiving end does not exist");
+  }
+
   function renderStatus(summary) {
     const job = summary?.job;
     const display = summary?.display || {};
@@ -107,14 +114,13 @@
 
   function renderBridgeStatus(status) {
     const pending = status?.pending;
+    elements.bridge.hidden = !pending;
     elements.approveShare.disabled = !pending;
     elements.declineShare.disabled = !pending;
     if (pending) {
       elements.bridgeStatus.textContent = `Share locally stored energy interval CSV with the Time-of-Use Rate Analyzer at https://offpeakadvisor.com. This request is from ${pending.origin} for ${pending.rowCount || 0} saved intervals.`;
-    } else if (status?.rowCount && status?.file) {
-      elements.bridgeStatus.textContent = `${status.rowCount} saved intervals are available as ${status.file.name}. No analyzer request is waiting.`;
     } else {
-      elements.bridgeStatus.textContent = "No saved usage data is available to share.";
+      elements.bridgeStatus.textContent = "No analyzer request is waiting.";
     }
   }
 
@@ -137,15 +143,18 @@
         sendToActiveTab({ type: "ENERGY_STATUS" }).catch(error => {
           elements.status.textContent = "Open the utility energy usage page and log in.";
           renderStatus({ doneDays: 0, rows: 0, pageReady: false });
+          if (isMissingContentScriptError(error)) {
+            return null;
+          }
           throw error;
         }),
         sendToBackground({ type: "ENERGY_BRIDGE_STATUS" })
       ]);
-      renderStatus(summary);
+      if (summary) renderStatus(summary);
       renderBridgeStatus(bridge);
     } catch (error) {
       elements.status.textContent = "Open the utility energy usage page and log in.";
-      setError(error.message);
+      setError(isMissingContentScriptError(error) ? "" : error.message);
       renderStatus({ doneDays: 0, rows: 0, pageReady: false });
       sendToBackground({ type: "ENERGY_BRIDGE_STATUS" }).then(renderBridgeStatus).catch(() => {});
     }
