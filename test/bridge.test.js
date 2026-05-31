@@ -45,7 +45,7 @@ assert.equal(csvValue('with "quotes", comma\nnewline'), '"with ""quotes"", comma
 
 assert.deepEqual(
   sanitizeRow({
-    timestamp_local: "2026-05-08T01:00:00",
+    timestamp_local: "2026-05-08T01:00:00-06:00",
     interval_index: 1,
     read_date: "2026-05-08",
     read_time: "01:00",
@@ -54,11 +54,7 @@ assert.deepEqual(
     billingAccountNumber: "must-not-cross"
   }),
   {
-    timestamp_local: "2026-05-08T01:00:00",
-    interval_index: 1,
-    read_date: "2026-05-08",
-    read_time: "01:00",
-    read_time_occurrence: 1,
+    timestamp_local: "2026-05-08T01:00:00-06:00",
     usage_kwh: 1.25
   }
 );
@@ -69,7 +65,7 @@ const chromeApi = fakeChrome({
     day: "2026-05-08",
     rows: [
       {
-        timestamp_local: "2026-05-08T01:00:00",
+        timestamp_local: "2026-05-08T01:00:00-06:00",
         interval_index: 1,
         read_date: "2026-05-08",
         read_time: "01:00",
@@ -87,8 +83,8 @@ const chromeApi = fakeChrome({
   assert.equal("billingAccountNumber" in rows[0], false);
 
   const csv = rowsToCsv(rows);
-  assert.equal(csv.split("\n")[0], "timestamp_local,interval_index,read_date,read_time,read_time_occurrence,usage_kwh");
-  assert.equal(csv.split("\n")[1], "2026-05-08T01:00:00,1,2026-05-08,01:00,1,1.25");
+  assert.equal(csv.split("\n")[0], "timestamp_local,usage_kwh");
+  assert.equal(csv.split("\n")[1], "2026-05-08T01:00:00-06:00,1.25");
 
   const forbidden = await handleExternalMessage(
     chromeApi,
@@ -146,7 +142,7 @@ const chromeApi = fakeChrome({
   assert.equal(shared.file.kind, "csv");
   assert.equal(shared.file.rowCount, 1);
   assert.equal(shared.file.text.includes("billingAccountNumber"), false);
-  assert.equal(shared.file.text.split("\n")[1], "2026-05-08T01:00:00,1,2026-05-08,01:00,1,1.25");
+  assert.equal(shared.file.text.split("\n")[1], "2026-05-08T01:00:00-06:00,1.25");
 
   console.log("bridge privacy checks passed");
 })().catch(error => {

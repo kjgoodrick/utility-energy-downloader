@@ -9,6 +9,13 @@
   const DATE_INPUT_SELECTOR = 'input[placeholder="Show usage through :"]';
   const PERIOD_OPTION_LABEL = "One Day";
   const LOADING_SELECTOR = "#loading-component, .overlay";
+  const DEFAULT_UTILITY_TIME_ZONE = "America/Denver";
+  const UTILITY_CONFIGS = [
+    {
+      hostPattern: /\.rockymountainpower\.net$/i,
+      timeZone: "America/Denver"
+    }
+  ];
   const REQUEST_TIMEOUT_MS = 45_000;
   const READY_TIMEOUT_MS = 30_000;
   const MAX_ATTEMPTS_PER_DAY = 3;
@@ -24,6 +31,7 @@
     rowsToCsv
   } = exportApi;
   const timestampLocal = globalThis.energyUsageTime?.timestampLocal || fallbackTimestampLocal;
+  const utilityConfig = currentUtilityConfig();
 
   let activeRun = null;
   // These separate "what happened in this page session" from older persisted
@@ -63,6 +71,13 @@
     return `${year}-${month}-${day}`;
   }
 
+  function isoDateUtc(date) {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   function defaultStartDate() {
     const date = new Date();
     date.setDate(date.getDate() - 1);
@@ -77,12 +92,14 @@
   function sanitizeExportRow(row) {
     return {
       timestamp_local: row?.timestamp_local ?? null,
-      interval_index: row?.interval_index ?? null,
-      read_date: row?.read_date_iso ?? row?.read_date ?? null,
-      read_time: row?.read_time ?? null,
-      read_time_occurrence: row?.read_time_occurrence ?? null,
       usage_kwh: row?.usage_kwh ?? null
     };
+  }
+
+  function currentUtilityConfig() {
+    const host = location.hostname;
+    return UTILITY_CONFIGS.find(config => config.hostPattern.test(host))
+      || { timeZone: DEFAULT_UTILITY_TIME_ZONE };
   }
 
   function csvValue(value) {
@@ -92,7 +109,7 @@
   }
 
   function createExportFallback() {
-    const headers = ["timestamp_local", "interval_index", "read_date", "read_time", "read_time_occurrence", "usage_kwh"];
+    const headers = ["timestamp_local", "usage_kwh"];
     const dayPrefix = "energy.day.";
     return {
       CSV_MIME: "text/csv",
@@ -116,7 +133,7 @@
     };
   }
 
-  function fallbackTimestampLocal(readDateIso, readTime) {
+  function fallbackTimestampLocal(readDateIso, readTime, occurrence = 1, timeZone = DEFAULT_UTILITY_TIME_ZONE) {
     if (!readDateIso || !readTime) return null;
     const match = String(readTime).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
     if (!match) return null;
@@ -128,11 +145,75 @@
     if (minute > 59 || second > 59) return null;
     if (meridiem === "AM" && hour === 12) hour = 0;
     if (meridiem === "PM" && hour < 12) hour += 12;
+    let date = readDateIso;
     if (hour === 24 && minute === 0 && second === 0) {
-      return `${addDays(readDateIso, 1)}T00:00:00`;
+      date = addDays(readDateIso, 1);
+      hour = 0;
     }
     if (hour < 0 || hour > 23) return null;
-    return `${readDateIso}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
+    const offset = fallbackOffsetMinutesForZone(date, { hour, minute, second }, occurrence, timeZone);
+    if (offset === null) return null;
+    return `${date}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}${formatOffset(offset)}`;
+  }
+
+  function fallbackOffsetMinutesForZone(readDateIso, timeParts, occurrence = 1, timeZone = DEFAULT_UTILITY_TIME_ZONE) {
+    const match = String(readDateIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const dateParts = { year, month, day };
+    const localMs = Date.UTC(year, month - 1, day, timeParts.hour, timeParts.minute || 0, timeParts.second || 0);
+    const matches = [];
+    for (let offset = -14 * 60; offset <= 14 * 60; offset += 15) {
+      const utcMs = localMs - offset * 60_000;
+      if (formatsAsZoneWallTime(utcMs, dateParts, timeParts, timeZone)) {
+        matches.push({ offset, utcMs });
+      }
+    }
+    if (!matches.length) return null;
+    matches.sort((a, b) => a.utcMs - b.utcMs);
+    return matches[Math.min(Math.max(Number(occurrence) || 1, 1), matches.length) - 1].offset;
+  }
+
+  function formatsAsZoneWallTime(utcMs, dateParts, timeParts, timeZone) {
+    const formatted = dateTimePartsInZone(utcMs, timeZone);
+    return formatted.year === dateParts.year
+      && formatted.month === dateParts.month
+      && formatted.day === dateParts.day
+      && formatted.hour === timeParts.hour
+      && formatted.minute === (timeParts.minute || 0)
+      && formatted.second === (timeParts.second || 0);
+  }
+
+  function dateTimePartsInZone(utcMs, timeZone) {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    });
+    const values = Object.fromEntries(formatter.formatToParts(new Date(utcMs))
+      .filter(part => part.type !== "literal")
+      .map(part => [part.type, Number(part.value)]));
+    return {
+      year: values.year,
+      month: values.month,
+      day: values.day,
+      hour: values.hour,
+      minute: values.minute,
+      second: values.second
+    };
+  }
+
+  function formatOffset(minutes) {
+    const sign = minutes >= 0 ? "+" : "-";
+    const abs = Math.abs(minutes);
+    return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
   }
 
   function createJobId() {
@@ -157,7 +238,10 @@
   }
 
   function parseIsoDay(day) {
-    const date = new Date(`${day}T00:00:00`);
+    const match = String(day || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const date = match
+      ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+      : new Date(NaN);
     if (!Number.isFinite(date.getTime())) {
       throw new Error(`Invalid date: ${day}`);
     }
@@ -166,8 +250,8 @@
 
   function addDays(day, count) {
     const date = parseIsoDay(day);
-    date.setDate(date.getDate() + count);
-    return date.toISOString().slice(0, 10);
+    date.setUTCDate(date.getUTCDate() + count);
+    return isoDateUtc(date);
   }
 
   function enumerateDays(start, end) {
@@ -182,7 +266,7 @@
 
   function formatUtilityDate(day) {
     const date = parseIsoDay(day);
-    return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    return `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}`;
   }
 
   function formatDuration(ms) {
@@ -214,7 +298,7 @@
       return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
     }
     const parsed = new Date(text);
-    return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+    return Number.isFinite(parsed.getTime()) ? isoDateUtc(parsed) : null;
   }
 
   function friendlyErrorMessage(errorText) {
@@ -259,7 +343,8 @@
           read_date_iso: readDateIso,
           read_time: item.readTime ?? null,
           read_time_occurrence: readTimeOccurrence,
-          timestamp_local: timestampLocal(readDateIso, item.readTime),
+          timestamp_local: timestampLocal(readDateIso, item.readTime, readTimeOccurrence, utilityConfig.timeZone),
+          utility_time_zone: utilityConfig.timeZone,
           usage_kwh: Number.isFinite(usage) ? usage : null
         };
       })

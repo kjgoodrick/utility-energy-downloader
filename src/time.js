@@ -2,11 +2,25 @@
   "use strict";
 
   function parseIsoDay(day) {
-    const date = new Date(`${day}T00:00:00`);
+    const parts = parseIsoDayParts(day);
+    const date = parts ? new Date(Date.UTC(parts.year, parts.month - 1, parts.day)) : new Date(NaN);
     if (!Number.isFinite(date.getTime())) {
       throw new Error(`Invalid date: ${day}`);
     }
     return date;
+  }
+
+  function isoDate(date) {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function addDays(day, count) {
+    const date = parseIsoDay(day);
+    date.setUTCDate(date.getUTCDate() + count);
+    return isoDate(date);
   }
 
   function parseReadTime(readTime) {
@@ -32,27 +46,95 @@
     return { hour, minute, second };
   }
 
-  function timestampLocal(readDateIso, readTime) {
+  function parseIsoDayParts(day) {
+    const match = String(day || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    return {
+      year: Number(match[1]),
+      month: Number(match[2]),
+      day: Number(match[3])
+    };
+  }
+
+  function offsetMinutesForZone(readDateIso, parsedTime, occurrence = 1, timeZone = "America/Denver") {
+    const parts = parseIsoDayParts(readDateIso);
+    if (!parts) return null;
+
+    const { year, month, day } = parts;
+    const localMs = Date.UTC(year, month - 1, day, parsedTime.hour, parsedTime.minute || 0, parsedTime.second || 0);
+    const matches = [];
+    for (let offset = -14 * 60; offset <= 14 * 60; offset += 15) {
+      const utcMs = localMs - offset * 60_000;
+      if (formatsAsZoneWallTime(utcMs, parts, parsedTime, timeZone)) {
+        matches.push({ offset, utcMs });
+      }
+    }
+    if (!matches.length) return null;
+    matches.sort((a, b) => a.utcMs - b.utcMs);
+    return matches[Math.min(Math.max(Number(occurrence) || 1, 1), matches.length) - 1].offset;
+  }
+
+  function formatsAsZoneWallTime(utcMs, dateParts, timeParts, timeZone) {
+    const formatted = dateTimePartsInZone(utcMs, timeZone);
+    return formatted.year === dateParts.year
+      && formatted.month === dateParts.month
+      && formatted.day === dateParts.day
+      && formatted.hour === timeParts.hour
+      && formatted.minute === (timeParts.minute || 0)
+      && formatted.second === (timeParts.second || 0);
+  }
+
+  function dateTimePartsInZone(utcMs, timeZone) {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    });
+    const values = Object.fromEntries(formatter.formatToParts(new Date(utcMs))
+      .filter(part => part.type !== "literal")
+      .map(part => [part.type, Number(part.value)]));
+    return {
+      year: values.year,
+      month: values.month,
+      day: values.day,
+      hour: values.hour,
+      minute: values.minute,
+      second: values.second
+    };
+  }
+
+  function formatOffset(minutes) {
+    const sign = minutes >= 0 ? "+" : "-";
+    const abs = Math.abs(minutes);
+    return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+  }
+
+  function timestampLocal(readDateIso, readTime, occurrence = 1, timeZone = "America/Denver") {
     if (!readDateIso || !readTime) return null;
     const parsed = parseReadTime(readTime);
     if (!parsed) return null;
 
-    // Preserve the utility's local clock time instead of inventing a timezone
-    // offset. DST fall-back duplicates are disambiguated by row metadata in the
-    // downloader, because a bare local timestamp cannot represent both hours.
-    const date = parseIsoDay(readDateIso);
+    let date = readDateIso;
+    let time = parsed;
     if (parsed.hour === 24) {
-      date.setDate(date.getDate() + 1);
-      return `${date.toISOString().slice(0, 10)}T00:00:00`;
+      date = addDays(readDateIso, 1);
+      time = { hour: 0, minute: 0, second: 0 };
     }
+    const offset = offsetMinutesForZone(date, time, occurrence, timeZone);
+    if (offset === null) return null;
     return [
-      `${readDateIso}T${String(parsed.hour).padStart(2, "0")}`,
-      String(parsed.minute).padStart(2, "0"),
-      String(parsed.second).padStart(2, "0")
+      `${date}T${String(time.hour).padStart(2, "0")}`,
+      String(time.minute).padStart(2, "0"),
+      `${String(time.second).padStart(2, "0")}${formatOffset(offset)}`
     ].join(":");
   }
 
-  const api = { parseReadTime, timestampLocal };
+  const api = { offsetMinutesForZone, parseReadTime, timestampLocal };
   root.energyUsageTime = api;
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;

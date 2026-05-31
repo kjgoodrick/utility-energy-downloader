@@ -2,9 +2,11 @@
   "use strict";
 
   const DAY_KEY_PREFIX = "energy.day.";
-  const CSV_FORMAT = "usage-csv-v1";
+  const CSV_FORMAT = "usage-csv-v2";
   const CSV_MIME = "text/csv";
-  const CSV_HEADERS = ["timestamp_local", "interval_index", "read_date", "read_time", "read_time_occurrence", "usage_kwh"];
+  const CSV_HEADERS = ["timestamp_local", "usage_kwh"];
+  const timeApi = root.energyUsageTime || (typeof require === "function" ? require("./time.js") : null);
+  const DEFAULT_UTILITY_TIME_ZONE = "America/Denver";
 
   function dayRecordsFromSnapshot(snapshot) {
     return Object.entries(snapshot || {})
@@ -14,12 +16,17 @@
   }
 
   function sanitizeRow(row) {
+    const readDate = row?.read_date_iso ?? row?.read_date ?? null;
+    const timestamp = readDate && row?.read_time && timeApi?.timestampLocal
+      ? timeApi.timestampLocal(
+          readDate,
+          row.read_time,
+          row?.read_time_occurrence,
+          row?.utility_time_zone || DEFAULT_UTILITY_TIME_ZONE
+        ) || row?.timestamp_local
+      : row?.timestamp_local;
     return {
-      timestamp_local: row?.timestamp_local ?? null,
-      interval_index: row?.interval_index ?? null,
-      read_date: row?.read_date_iso ?? row?.read_date ?? null,
-      read_time: row?.read_time ?? null,
-      read_time_occurrence: row?.read_time_occurrence ?? null,
+      timestamp_local: timestamp ?? null,
       usage_kwh: row?.usage_kwh ?? null
     };
   }

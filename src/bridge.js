@@ -113,7 +113,7 @@
       return { ok: false, status: "unknown_message", message: "Unknown external message." };
     }
     if (message.format !== CSV_FORMAT) {
-      return { ok: false, status: "unsupported_format", message: "The TOU analyzer must request usage-csv-v1." };
+      return { ok: false, status: "unsupported_format", message: "The TOU analyzer must request usage-csv-v2." };
     }
 
     const origin = originFromSender(sender);
