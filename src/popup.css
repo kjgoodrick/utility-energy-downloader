@@ -68,6 +68,16 @@ input {
   padding: 16px;
 }
 
+body.approval-mode .panel > .date-grid,
+body.approval-mode .panel > .progress,
+body.approval-mode .panel > .actions {
+  display: none;
+}
+
+body.approval-mode .panel {
+  gap: 12px;
+}
+
 header {
   border-bottom: 1px solid var(--line);
   padding-bottom: 12px;
@@ -135,6 +145,11 @@ input {
   border-top: 1px solid var(--line);
   background: transparent;
   padding: 10px;
+}
+
+body.approval-mode .bridge {
+  border-top: 0;
+  padding: 0;
 }
 
 .bridge[hidden] {

@@ -1,8 +1,8 @@
 const assert = require("node:assert/strict");
 const {
+  APPROVED_SHARE_KEY,
   CSV_FORMAT,
   PENDING_SHARE_KEY,
-  SHARE_GRANTS_KEY,
   collectStoredRows,
   csvValue,
   handleExternalMessage,
@@ -123,19 +123,20 @@ const chromeApi = fakeChrome({
 
   const pending = await handleExternalMessage(
     chromeApi,
-    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
+    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT, requestId: "request-1" },
     { origin: "https://offpeakadvisor.com" }
   );
   assert.equal(pending.status, "approval_required");
   assert.equal(chromeApi.state[PENDING_SHARE_KEY].origin, "https://offpeakadvisor.com");
+  assert.equal(chromeApi.state[PENDING_SHARE_KEY].requestId, "request-1");
 
   const approved = await handleRuntimeMessage(chromeApi, { type: "ENERGY_BRIDGE_APPROVE" });
   assert.equal(approved.status, "approved");
-  assert.equal(Boolean(chromeApi.state[SHARE_GRANTS_KEY]["https://offpeakadvisor.com"]), true);
+  assert.equal(chromeApi.state[APPROVED_SHARE_KEY].requestId, "request-1");
 
   const shared = await handleExternalMessage(
     chromeApi,
-    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
+    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT, requestId: "request-1" },
     { origin: "https://offpeakadvisor.com" }
   );
   assert.equal(shared.ok, true);
@@ -144,6 +145,15 @@ const chromeApi = fakeChrome({
   assert.equal(shared.file.rowCount, 1);
   assert.equal(shared.file.text.includes("billingAccountNumber"), false);
   assert.equal(shared.file.text.split("\n")[1], "2026-05-08T01:00:00-06:00,1.25");
+  assert.equal(chromeApi.state[APPROVED_SHARE_KEY], undefined);
+
+  const nextPending = await handleExternalMessage(
+    chromeApi,
+    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT, requestId: "request-2" },
+    { origin: "https://offpeakadvisor.com" }
+  );
+  assert.equal(nextPending.status, "approval_required");
+  assert.equal(chromeApi.state[PENDING_SHARE_KEY].requestId, "request-2");
 
   const wwwChromeApi = fakeChrome({
     "energy.day.2026-05-08": {

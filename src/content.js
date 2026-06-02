@@ -5,6 +5,7 @@
   const STORAGE_JOB_KEY = "energy.job";
   const STORAGE_META_KEY = "energy.meta";
   const PENDING_SHARE_KEY = "energy.share.pending";
+  const APPROVED_SHARE_KEY = "energy.share.approved";
   const SHARE_GRANTS_KEY = "energy.share.grants";
   const DATE_INPUT_SELECTOR = 'input[placeholder="Show usage through :"]';
   const PERIOD_OPTION_LABEL = "One Day";
@@ -1509,6 +1510,7 @@
       || key === STORAGE_JOB_KEY
       || key === STORAGE_META_KEY
       || key === PENDING_SHARE_KEY
+      || key === APPROVED_SHARE_KEY
       || key === SHARE_GRANTS_KEY);
     await storage.remove(keys);
     return summarizeStoredData();

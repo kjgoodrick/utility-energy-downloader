@@ -156,6 +156,7 @@
 
   function renderBridgeStatus(status) {
     const pending = status?.pending;
+    document.body.classList.toggle("approval-mode", Boolean(pending));
     elements.bridge.hidden = !pending;
     elements.approveShare.disabled = !pending;
     elements.declineShare.disabled = !pending;
@@ -184,8 +185,11 @@
     try {
       if (!stickyError) setError("");
       const bridge = await sendToBackground({ type: "ENERGY_BRIDGE_STATUS" });
+      if (bridge?.pending) {
+        renderBridgeStatus(bridge);
+        return;
+      }
       const summary = await sendToActiveTab({ type: "ENERGY_STATUS" }).catch(error => {
-        if (bridge?.pending) return null;
         elements.status.textContent = "Open the utility energy usage page and log in.";
         renderStatus({ doneDays: 0, rows: 0, pageReady: false });
         if (isMissingContentScriptError(error)) {

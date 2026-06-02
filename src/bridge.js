@@ -2,8 +2,8 @@
   "use strict";
 
   const PENDING_SHARE_KEY = "energy.share.pending";
-  const SHARE_GRANTS_KEY = "energy.share.grants";
-  const GRANT_TTL_MS = 15 * 60 * 1000;
+  const APPROVED_SHARE_KEY = "energy.share.approved";
+  const APPROVAL_TTL_MS = 2 * 60 * 1000;
   const ALLOWED_ORIGINS = new Set([
     "https://offpeakadvisor.com",
     "https://www.offpeakadvisor.com"
@@ -45,17 +45,26 @@
     return collectStoredRowsFromSnapshot(all);
   }
 
-  async function hasGrant(chromeApi, origin, now = Date.now()) {
-    const values = await chromeApi.storage.local.get(SHARE_GRANTS_KEY);
-    const grants = values[SHARE_GRANTS_KEY] || {};
-    const grant = grants[origin];
-    return Boolean(grant?.approvedAt && now - Date.parse(grant.approvedAt) <= GRANT_TTL_MS);
+  function requestIdFromMessage(message) {
+    return typeof message?.requestId === "string" ? message.requestId : "";
   }
 
-  async function rememberPending(chromeApi, origin, rowCount) {
+  async function approvedRequest(chromeApi, origin, requestId, now = Date.now()) {
+    const values = await chromeApi.storage.local.get(APPROVED_SHARE_KEY);
+    const approval = values[APPROVED_SHARE_KEY];
+    return Boolean(
+      approval?.origin === origin &&
+      approval?.requestId === requestId &&
+      approval?.approvedAt &&
+      now - Date.parse(approval.approvedAt) <= APPROVAL_TTL_MS
+    );
+  }
+
+  async function rememberPending(chromeApi, origin, requestId, rowCount) {
     await chromeApi.storage.local.set({
       [PENDING_SHARE_KEY]: {
         origin,
+        requestId,
         requestedAt: new Date().toISOString(),
         rowCount
       }
@@ -80,12 +89,13 @@
       return { ok: false, status: "no_pending_request", message: "No analyzer request is waiting." };
     }
 
-    const grantValues = await chromeApi.storage.local.get(SHARE_GRANTS_KEY);
-    const grants = grantValues[SHARE_GRANTS_KEY] || {};
-    grants[pending.origin] = {
-      approvedAt: new Date().toISOString()
-    };
-    await chromeApi.storage.local.set({ [SHARE_GRANTS_KEY]: grants });
+    await chromeApi.storage.local.set({
+      [APPROVED_SHARE_KEY]: {
+        origin: pending.origin,
+        requestId: pending.requestId || "",
+        approvedAt: new Date().toISOString()
+      }
+    });
     await chromeApi.storage.local.remove(PENDING_SHARE_KEY);
     await clearPendingSharePrompt(chromeApi);
     return { ok: true, status: "approved", origin: pending.origin };
@@ -98,7 +108,7 @@
   }
 
   async function bridgeStatus(chromeApi) {
-    const values = await chromeApi.storage.local.get([PENDING_SHARE_KEY, SHARE_GRANTS_KEY]);
+    const values = await chromeApi.storage.local.get([PENDING_SHARE_KEY, APPROVED_SHARE_KEY]);
     const rows = await collectStoredRows(chromeApi);
     let pending = values[PENDING_SHARE_KEY] || null;
     if (pending && !rows.length) {
@@ -111,7 +121,6 @@
     return {
       ok: true,
       pending,
-      grants: values[SHARE_GRANTS_KEY] || {},
       rowCount: rows.length,
       file: rows.length
         ? {
@@ -141,10 +150,12 @@
       return { ok: false, status: "empty", message: "No saved usage data is available." };
     }
 
-    if (!(await hasGrant(chromeApi, origin))) {
+    const requestId = requestIdFromMessage(message);
+    if (!(await approvedRequest(chromeApi, origin, requestId))) {
       const existingPending = await chromeApi.storage.local.get(PENDING_SHARE_KEY);
-      const alreadyPending = existingPending[PENDING_SHARE_KEY]?.origin === origin;
-      const rowCount = await rememberPending(chromeApi, origin, rows.length);
+      const alreadyPending = existingPending[PENDING_SHARE_KEY]?.origin === origin &&
+        (existingPending[PENDING_SHARE_KEY]?.requestId || "") === requestId;
+      const rowCount = await rememberPending(chromeApi, origin, requestId, rows.length);
       if (!alreadyPending) {
         await showPendingSharePrompt(chromeApi);
       }
@@ -156,6 +167,7 @@
       };
     }
 
+    await chromeApi.storage.local.remove(APPROVED_SHARE_KEY);
     const exportedAt = new Date().toISOString();
     return {
       ok: true,
@@ -199,11 +211,11 @@
 
   const api = {
     ALLOWED_ORIGINS,
+    APPROVED_SHARE_KEY,
     CSV_FORMAT,
     CSV_HEADERS,
     CSV_MIME,
     PENDING_SHARE_KEY,
-    SHARE_GRANTS_KEY,
     approvePendingShare,
     bridgeStatus,
     collectStoredRows,
