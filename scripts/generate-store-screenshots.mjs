@@ -304,6 +304,7 @@ function renderScenario(scenario) {
       .browser {
         align-self: center;
         min-width: 0;
+        height: 626px;
         border: 1px solid rgba(17, 20, 24, 0.13);
         border-radius: 8px;
         background: #ffffff;
@@ -345,14 +346,14 @@ function renderScenario(scenario) {
 
       .browser-body {
         position: relative;
-        height: 600px;
+        height: 582px;
         background: #f8f8f9;
       }
 
       .utility-page {
         display: grid;
-        gap: 18px;
-        padding: 30px;
+        gap: 16px;
+        padding: 28px;
       }
 
       .utility-header {
@@ -409,7 +410,7 @@ function renderScenario(scenario) {
         display: flex;
         align-items: end;
         gap: 7px;
-        height: 210px;
+        height: 188px;
         border: 1px solid #ececee;
         border-radius: 8px;
         background: #ffffff;
@@ -426,12 +427,13 @@ function renderScenario(scenario) {
 
       .popup-shadow {
         position: absolute;
-        right: 30px;
-        top: 42px;
+        right: 24px;
+        bottom: 25px;
         width: 360px;
         border-radius: 8px;
         box-shadow: 0 22px 60px rgba(17, 20, 24, 0.28);
         overflow: hidden;
+        transform-origin: top right;
       }
 
       ${scopedPopupCss}
