@@ -50,6 +50,13 @@
     return isoDate(date);
   }
 
+  function formatUserFacingIsoDay(day) {
+    if (!day) return "-";
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+    if (!match) return day;
+    return `${Number(match[2])}/${Number(match[3])}/${match[1]}`;
+  }
+
   function applyDateLimits() {
     const maxDate = defaultEndDate();
     elements.startDate.max = maxDate;
@@ -118,7 +125,7 @@
     elements.daysSaved.textContent = String(summary?.doneDays || 0);
     elements.daysUnavailable.textContent = String(summary?.unavailableDays || 0);
     elements.rowsSaved.textContent = String(summary?.rows || 0);
-    elements.currentDay.textContent = display.showActiveProgress ? job?.currentDay || "-" : "-";
+    elements.currentDay.textContent = display.showActiveProgress ? formatUserFacingIsoDay(job?.currentDay) : "-";
     elements.progressFill.style.width = `${progress.percent || 0}%`;
     elements.progressBar.setAttribute("aria-valuenow", String(progress.percent || 0));
     elements.progressCount.textContent = `${progress.completedDays || 0} of ${progress.totalDays || 0} days`;

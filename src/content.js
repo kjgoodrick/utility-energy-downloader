@@ -305,6 +305,13 @@
     return `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}`;
   }
 
+  function formatUserFacingIsoDay(day) {
+    if (!day) return "-";
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+    if (!match) return day;
+    return `${Number(match[2])}/${Number(match[3])}/${match[1]}`;
+  }
+
   function formatDuration(ms) {
     if (!Number.isFinite(ms) || ms <= 0) return "less than a minute";
 
@@ -903,7 +910,7 @@
         }
 
         .panel {
-          width: 320px;
+          width: 340px;
           border: 1px solid var(--line);
           border-radius: 6px;
           background: var(--panel);
@@ -983,15 +990,16 @@
 
         .stats {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: 0.82fr 0.86fr 0.96fr 1.36fr;
           gap: 6px;
           margin-bottom: 8px;
         }
 
         .stat {
+          min-width: 0;
           border: 1px solid var(--line);
           border-radius: 6px;
-          padding: 6px;
+          padding: 6px 5px;
         }
 
         .stat span {
@@ -1007,8 +1015,9 @@
           margin-top: 2px;
           color: var(--heading);
           font-family: var(--font-sans);
-          font-size: 12px;
+          font-size: 11.5px;
           font-variant-numeric: tabular-nums;
+          white-space: nowrap;
         }
 
         .progress-wrap {
@@ -1291,7 +1300,7 @@
       days.textContent = String(summary?.doneDays || 0);
       skipped.textContent = String(summary?.unavailableDays || 0);
       rows.textContent = String(summary?.rows || 0);
-      current.textContent = display.showActiveProgress ? job?.currentDay || "-" : "-";
+      current.textContent = display.showActiveProgress ? formatUserFacingIsoDay(job?.currentDay) : "-";
       progressFill.style.width = `${progress.percent || 0}%`;
       progressBar.setAttribute("aria-valuenow", String(progress.percent || 0));
       progressCount.textContent = `${progress.completedDays || 0} of ${progress.totalDays || 0} days`;
