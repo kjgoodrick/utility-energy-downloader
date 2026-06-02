@@ -19,6 +19,8 @@
   const REQUEST_TIMEOUT_MS = 45_000;
   const READY_TIMEOUT_MS = 30_000;
   const MAX_ATTEMPTS_PER_DAY = 3;
+  const UNAVAILABLE_GRACE_MS = 3_000;
+  const UNAVAILABLE_STABLE_MS = 750;
   // Small jitter keeps retries from hammering the utility page if it is slow.
   const MIN_DELAY_MS = 2_000;
   const MAX_DELAY_MS = 6_000;
@@ -28,6 +30,7 @@
     CSV_MIME,
     DAY_KEY_PREFIX,
     collectStoredRowsFromSnapshot,
+    csvFileName,
     rowsToCsv
   } = exportApi;
   const timestampLocal = globalThis.energyUsageTime?.timestampLocal || fallbackTimestampLocal;
@@ -228,6 +231,38 @@
     return MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1));
   }
 
+  function createRunCancelledError(message = "Download stopped.") {
+    const error = new Error(message);
+    error.name = "EnergyDownloadCancelled";
+    return error;
+  }
+
+  function isRunCancelled(error) {
+    return error?.name === "EnergyDownloadCancelled";
+  }
+
+  function cancelPendingUsageWaiters(error = createRunCancelledError()) {
+    for (const waiter of Array.from(pendingUsageWaiters)) {
+      window.clearTimeout(waiter.timeoutId);
+      pendingUsageWaiters.delete(waiter);
+      waiter.reject(error);
+    }
+  }
+
+  function cancelActiveRun(message) {
+    if (activeRun) {
+      activeRun.cancelled = true;
+      activeRun = null;
+    }
+    cancelPendingUsageWaiters(createRunCancelledError(message));
+  }
+
+  function assertRunActive(token) {
+    if (!token || token.cancelled || activeRun !== token) {
+      throw createRunCancelledError();
+    }
+  }
+
   function isExtensionContextInvalidated(error) {
     const message = error?.message || String(error || "");
     return message.includes("Extension context invalidated");
@@ -356,6 +391,20 @@
     return rows.some(row => row.read_date_iso === day)
       ? { rows }
       : null;
+  }
+
+  function utilityUnavailableReason() {
+    const text = document.body?.innerText || "";
+    const noUsage = /No usage data is currently available/i.test(text);
+    const invalidRange = /Provided date range is not valid/i.test(text);
+    if (!noUsage && !invalidRange) return null;
+    if (invalidRange && noUsage) {
+      return "The utility says this date is outside the available usage range.";
+    }
+    if (invalidRange) {
+      return "The utility says this date is outside the available usage range.";
+    }
+    return "The utility says no usage data is currently available for this date.";
   }
 
   function getVisibleDateField() {
@@ -545,6 +594,39 @@
     };
   }
 
+  function waitForUnavailableDay(day, timeoutMs = REQUEST_TIMEOUT_MS) {
+    let cancelled = false;
+    const promise = (async () => {
+      const earliestCheckAt = Date.now() + UNAVAILABLE_GRACE_MS;
+      const deadline = Date.now() + timeoutMs;
+      let seenSince = null;
+
+      while (!cancelled && Date.now() < deadline) {
+        const reason = utilityUnavailableReason();
+        const field = getVisibleDateField();
+        const fieldDay = field ? fieldValueIsoDay(field) : null;
+        if (Date.now() >= earliestCheckAt && reason && fieldDay === day) {
+          if (!seenSince) seenSince = Date.now();
+          if (Date.now() - seenSince >= UNAVAILABLE_STABLE_MS) {
+            return { day, reason };
+          }
+        } else {
+          seenSince = null;
+        }
+        await sleep(250);
+      }
+
+      return new Promise(() => {});
+    })();
+
+    return {
+      promise,
+      cancel() {
+        cancelled = true;
+      }
+    };
+  }
+
   function handleCapturedUsage(capture) {
     // A page response may arrive while more than one request attempt is waiting.
     // Resolve only waiters whose normalized rows actually include the target day.
@@ -603,27 +685,73 @@
     });
   }
 
-  async function isDayDone(day) {
-    const values = await storage.get(dayKey(day));
-    return values[dayKey(day)]?.status === "done";
+  async function markDayUnavailable(day, reason, attempt) {
+    const existing = (await storage.get(dayKey(day)))[dayKey(day)] || {};
+    await storage.set({
+      [dayKey(day)]: {
+        ...existing,
+        status: "unavailable",
+        day,
+        attempt,
+        reason,
+        checkedAt: new Date().toISOString()
+      }
+    });
   }
 
-  async function requestDay(day) {
+  async function dayStatus(day) {
+    const values = await storage.get(dayKey(day));
+    return values[dayKey(day)]?.status || null;
+  }
+
+  async function clearNonDoneDayRecords(startDate, endDate) {
+    const all = await storage.get(null);
+    const keys = enumerateDays(startDate, endDate)
+      .map(dayKey)
+      .filter(key => {
+        const status = all[key]?.status;
+        return status && status !== "done";
+      });
+    if (keys.length) {
+      await storage.remove(keys);
+    }
+  }
+
+  async function requestDay(day, token) {
     let lastError = null;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_DAY; attempt += 1) {
       let usageWait = null;
+      let unavailableWait = null;
       try {
+        assertRunActive(token);
         usageWait = waitForUsageCapture(day);
+        unavailableWait = waitForUnavailableDay(day);
         await selectOneDayPeriod();
+        assertRunActive(token);
         await setUsageDate(day);
-        const capture = await usageWait.promise;
-        if (!capture.rows.length) {
+        assertRunActive(token);
+        const result = await Promise.race([
+          usageWait.promise.then(capture => ({ type: "capture", capture })),
+          unavailableWait.promise.then(unavailable => ({ type: "unavailable", unavailable }))
+        ]);
+        usageWait.cancel();
+        unavailableWait.cancel();
+        if (result.type === "unavailable") {
+          await markDayUnavailable(day, result.unavailable.reason, attempt);
+          return { day, status: "unavailable", reason: result.unavailable.reason };
+        }
+
+        if (!result.capture.rows.length) {
           throw new Error(`The utility returned no interval rows for ${day}`);
         }
-        await markDayDone(day, capture);
-        return capture;
+        await markDayDone(day, result.capture);
+        return result.capture;
       } catch (error) {
         usageWait?.cancel();
+        unavailableWait?.cancel();
+        if (isRunCancelled(error)) {
+          throw error;
+        }
         lastError = error;
         await markDayFailed(day, error, attempt);
         await sleep(Math.min(30_000, 2_000 * attempt * attempt));
@@ -640,6 +768,7 @@
 
     const doneDays = days.filter(day => day.status === "done");
     const failedDays = days.filter(day => day.status === "failed");
+    const unavailableDays = days.filter(day => day.status === "unavailable");
     const rows = doneDays.reduce((count, day) => count + (day.rows?.length || 0), 0);
     const job = all[STORAGE_JOB_KEY] || null;
     const isSessionJob = Boolean(job?.jobId && (job.jobId === sessionJobId || job.jobId === sessionCompletedJobId));
@@ -653,8 +782,8 @@
     const jobDays = job?.startDate && job?.endDate ? enumerateDays(job.startDate, job.endDate) : [];
     const jobDaySet = new Set(jobDays);
     const completedInJob = jobDays.length
-      ? doneDays.filter(day => jobDaySet.has(day.day)).length
-      : doneDays.length;
+      ? days.filter(day => jobDaySet.has(day.day) && (day.status === "done" || day.status === "unavailable")).length
+      : doneDays.length + unavailableDays.length;
     const totalDays = job?.totalDays || jobDays.length || 0;
     const displayedCompletedDays = showActiveProgress ? completedInJob : 0;
     const displayedTotalDays = showActiveProgress ? totalDays : 0;
@@ -688,6 +817,7 @@
       },
       doneDays: doneDays.length,
       failedDays: failedDays.length,
+      unavailableDays: unavailableDays.length,
       rows,
       firstDay: doneDays.map(day => day.day).sort()[0] || null,
       lastDay: doneDays.map(day => day.day).sort().at(-1) || null,
@@ -713,7 +843,7 @@
       mime: CSV_MIME,
       extension: "csv",
       text: rowsToCsv(rows),
-      filename: `energy-usage-timeseries-${todayIso()}.csv`
+      filename: csvFileName ? csvFileName(rows) : `energy-usage-${todayIso()}.csv`
     };
   }
 
@@ -852,7 +982,7 @@
 
         .stats {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(4, 1fr);
           gap: 6px;
           margin-bottom: 8px;
         }
@@ -1049,7 +1179,8 @@
           <label>End <input class="end" type="date"></label>
         </div>
         <div class="stats">
-          <div class="stat"><span>Days</span><strong class="days">0</strong></div>
+          <div class="stat"><span>Saved</span><strong class="days">0</strong></div>
+          <div class="stat"><span>Skipped</span><strong class="skipped">0</strong></div>
           <div class="stat"><span>Intervals</span><strong class="rows">0</strong></div>
           <div class="stat"><span>Current</span><strong class="current">-</strong></div>
         </div>
@@ -1064,9 +1195,10 @@
         </div>
         <div class="actions">
           <button class="action start-button">Start</button>
-          <button class="action secondary resume-button">Resume</button>
-          <button class="action secondary pause-button">Pause</button>
-          <button class="action secondary export-button">CSV</button>
+          <button class="action secondary resume-button hidden">Resume</button>
+          <button class="action secondary pause-button hidden">Pause</button>
+          <button class="action secondary stop-button hidden">Stop</button>
+          <button class="action secondary export-button hidden">CSV</button>
         </div>
         <div class="error hidden"></div>
       </section>
@@ -1089,6 +1221,7 @@
     const startInput = shadow.querySelector(".start");
     const endInput = shadow.querySelector(".end");
     const days = shadow.querySelector(".days");
+    const skipped = shadow.querySelector(".skipped");
     const rows = shadow.querySelector(".rows");
     const current = shadow.querySelector(".current");
     const progressBar = shadow.querySelector(".progress-bar");
@@ -1098,6 +1231,7 @@
     const startButton = shadow.querySelector(".start-button");
     const resumeButton = shadow.querySelector(".resume-button");
     const pauseButton = shadow.querySelector(".pause-button");
+    const stopButton = shadow.querySelector(".stop-button");
     const exportButton = shadow.querySelector(".export-button");
     const noticeBackdrop = shadow.querySelector(".notice-backdrop");
     const noticeMessage = shadow.querySelector(".notice-message");
@@ -1154,6 +1288,7 @@
       const progress = summary?.progress || {};
       syncRangeInputs(summary);
       days.textContent = String(summary?.doneDays || 0);
+      skipped.textContent = String(summary?.unavailableDays || 0);
       rows.textContent = String(summary?.rows || 0);
       current.textContent = display.showActiveProgress ? job?.currentDay || "-" : "-";
       progressFill.style.width = `${progress.percent || 0}%`;
@@ -1161,12 +1296,15 @@
       progressCount.textContent = `${progress.completedDays || 0} of ${progress.totalDays || 0} days`;
       eta.textContent = progress.etaText || "-";
       const canResume = job?.status === "paused" || display.isInterrupted;
+      const canStop = display.isRunningNow || canResume;
       startButton.classList.toggle("hidden", display.isRunningNow || canResume);
       resumeButton.classList.toggle("hidden", !canResume);
       pauseButton.classList.toggle("hidden", !display.isRunningNow);
+      stopButton.classList.toggle("hidden", !canStop);
       exportButton.classList.toggle("hidden", !summary?.rows);
       pauseButton.disabled = !display.isRunningNow;
       resumeButton.disabled = !canResume;
+      stopButton.disabled = !canStop;
       exportButton.disabled = !summary?.rows;
 
       if (!summary?.pageReady) {
@@ -1179,7 +1317,9 @@
           : "Paused.";
         showPauseNotice(summary);
       } else if (display.isCompleteNow) {
-        status.textContent = "Download complete.";
+        status.textContent = summary?.unavailableDays
+          ? `Download complete. Skipped ${summary.unavailableDays} unavailable day${summary.unavailableDays === 1 ? "" : "s"}.`
+          : "Download complete.";
       } else if (display.isInterrupted) {
         status.textContent = "Ready. Previous download was interrupted.";
       } else if (summary?.rows) {
@@ -1230,6 +1370,7 @@
     endInput.addEventListener("change", applyDateLimits);
     resumeButton.addEventListener("click", () => run(resumeDownload));
     pauseButton.addEventListener("click", () => run(pauseDownload));
+    stopButton.addEventListener("click", () => run(stopDownload));
     exportButton.addEventListener("click", () => run(async () => {
       const result = await exportData();
       saveDownload(result.filename, result.text, result.mime);
@@ -1253,9 +1394,9 @@
       return;
     }
 
-    const token = {};
+    const token = { jobId: createJobId(), cancelled: false };
     activeRun = token;
-    const jobId = createJobId();
+    const jobId = token.jobId;
     sessionJobId = jobId;
     sessionCompletedJobId = null;
     const days = enumerateDays(startDate, endDate);
@@ -1274,21 +1415,26 @@
       });
 
       for (const day of days) {
-        if (activeRun !== token) return;
+        if (activeRun !== token || token.cancelled) return;
 
         const job = await readJob();
         if (!job || job.status !== "running") {
           return;
         }
 
-        const done = await isDayDone(day);
-        const completedDays = days.filter(candidate => candidate < day).length + (done ? 1 : 0);
+        const status = await dayStatus(day);
+        const done = status === "done";
+        const unavailable = status === "unavailable";
+        const completedDays = days.filter(candidate => candidate < day).length + (done || unavailable ? 1 : 0);
         await writeJob({ ...job, currentDay: day, completedDays });
 
-        if (!done) {
+        if (!done && !unavailable) {
           try {
-            await requestDay(day);
+            await requestDay(day, token);
           } catch (error) {
+            if (isRunCancelled(error)) {
+              return;
+            }
             await writeJob({
               ...(await readJob()),
               status: "paused",
@@ -1317,19 +1463,22 @@
     }
   }
 
-  async function startDownload(startDate, endDate) {
+  async function startDownload(startDate, endDate, options = {}) {
     if (startDate > endDate) {
       throw new Error("Start date must be before end date.");
     }
     if (endDate >= todayIso()) {
       throw new Error("End date must be before today. The utility does not provide complete data for the current day.");
     }
+    if (!options.resume) {
+      await clearNonDoneDayRecords(startDate, endDate);
+    }
     runDownload(startDate, endDate);
     return summarizeStoredData();
   }
 
   async function pauseDownload() {
-    activeRun = null;
+    cancelActiveRun("Download paused.");
     const job = await readJob();
     if (job) {
       await writeJob({ ...job, status: "paused" });
@@ -1344,10 +1493,17 @@
     }
     // Resuming starts a fresh run over the same range. Days already saved are
     // skipped, so only missing/failed days are requested again.
-    return startDownload(job.startDate, job.endDate);
+    return startDownload(job.startDate, job.endDate, { resume: true });
+  }
+
+  async function stopDownload() {
+    cancelActiveRun("Download stopped.");
+    await storage.remove(STORAGE_JOB_KEY);
+    return summarizeStoredData();
   }
 
   async function clearStoredData() {
+    cancelActiveRun("Download stopped.");
     const all = await storage.get(null);
     const keys = Object.keys(all).filter(key => key.startsWith(DAY_KEY_PREFIX)
       || key === STORAGE_JOB_KEY
@@ -1355,7 +1511,6 @@
       || key === PENDING_SHARE_KEY
       || key === SHARE_GRANTS_KEY);
     await storage.remove(keys);
-    activeRun = null;
     return summarizeStoredData();
   }
 
@@ -1377,6 +1532,8 @@
           return startDownload(message.startDate, message.endDate || todayIso());
         case "ENERGY_PAUSE":
           return pauseDownload();
+        case "ENERGY_STOP":
+          return stopDownload();
         case "ENERGY_RESUME":
           return resumeDownload();
         case "ENERGY_EXPORT":

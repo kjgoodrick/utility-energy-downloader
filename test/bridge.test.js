@@ -40,6 +40,7 @@ function fakeChrome(seed = {}) {
 
 assert.equal(originAllowed("http://localhost:5173"), false);
 assert.equal(originAllowed("https://offpeakadvisor.com"), true);
+assert.equal(originAllowed("https://www.offpeakadvisor.com"), true);
 assert.equal(originAllowed("https://attacker.example"), false);
 assert.equal(csvValue('with "quotes", comma\nnewline'), '"with ""quotes"", comma\nnewline"');
 
@@ -104,7 +105,7 @@ const chromeApi = fakeChrome({
   const empty = await handleExternalMessage(
     emptyChromeApi,
     { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
-    { origin: "https://offpeakadvisor.com" }
+    { origin: "https://www.offpeakadvisor.com" }
   );
   assert.equal(empty.status, "empty");
   assert.equal(emptyChromeApi.state[PENDING_SHARE_KEY], undefined);
@@ -143,6 +144,26 @@ const chromeApi = fakeChrome({
   assert.equal(shared.file.rowCount, 1);
   assert.equal(shared.file.text.includes("billingAccountNumber"), false);
   assert.equal(shared.file.text.split("\n")[1], "2026-05-08T01:00:00-06:00,1.25");
+
+  const wwwChromeApi = fakeChrome({
+    "energy.day.2026-05-08": {
+      status: "done",
+      day: "2026-05-08",
+      rows: [
+        {
+          timestamp_local: "2026-05-08T01:00:00-06:00",
+          usage_kwh: 1.25
+        }
+      ]
+    }
+  });
+  const wwwPending = await handleExternalMessage(
+    wwwChromeApi,
+    { type: "ENERGY_USAGE_EXPORT_FOR_TOU_ANALYZER", format: CSV_FORMAT },
+    { origin: "https://www.offpeakadvisor.com" }
+  );
+  assert.equal(wwwPending.status, "approval_required");
+  assert.equal(wwwChromeApi.state[PENDING_SHARE_KEY].origin, "https://www.offpeakadvisor.com");
 
   console.log("bridge privacy checks passed");
 })().catch(error => {

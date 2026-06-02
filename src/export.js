@@ -52,9 +52,22 @@
     ].join("\n");
   }
 
+  function csvFileName(rows, exportedAt = new Date().toISOString()) {
+    const dates = rows
+      .map(row => String(row.timestamp_local || "").slice(0, 10))
+      .filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value))
+      .sort();
+    const first = dates[0];
+    const last = dates.at(-1);
+    if (first && last) {
+      return `energy-usage-${first}-to-${last}.csv`;
+    }
+    return `energy-usage-${exportedAt.slice(0, 10)}.csv`;
+  }
+
   function csvFile(rows, exportedAt = new Date().toISOString()) {
     return {
-      name: `energy-usage-timeseries-${exportedAt.slice(0, 10)}.csv`,
+      name: csvFileName(rows, exportedAt),
       kind: "csv",
       mimeType: CSV_MIME,
       text: rowsToCsv(rows),
@@ -69,6 +82,7 @@
     DAY_KEY_PREFIX,
     collectStoredRowsFromSnapshot,
     csvFile,
+    csvFileName,
     csvValue,
     dayRecordsFromSnapshot,
     rowsToCsv,

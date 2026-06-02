@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Local-only downloader for meter usage time-series data from a supported electric utility account.",
   "minimum_chrome_version": "102",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsa4IQxCkYO4/mzD9yawcHzMTlEkROLv2HkBAQljk6HINKZyWV9HXSxROq6/LJ4kFJDcprF/imzN8azpkZRCO2vSdjqGFFLcE4YEU7dhgaoMdCP/Xl/VX3iYOmlCukMOnsyACNGKycVffWzTBYZZHKXtN6oXTSS6jBLcOZpYLBwHr9dq2t74hsvslvjBfgqI7L34wy3KXH5InJAheUhRh53Us9GVq1a4l/cDPWLb2qgONi2LTGQVpD15oT80Ef6DKQvzyNPtOQ+bbpu5OuchLLDONZmQUbKka5EmSDN81k7kDyqaj9kJ/ffkp4IGRuaxb2o0+Tq8mK9z5IRq4UOYP+wIDAQAB",
   "permissions": [
     "storage",
     "unlimitedStorage"
@@ -29,7 +30,8 @@
   },
   "externally_connectable": {
     "matches": [
-      "https://offpeakadvisor.com/*"
+      "https://offpeakadvisor.com/*",
+      "https://www.offpeakadvisor.com/*"
     ]
   },
   "content_scripts": [

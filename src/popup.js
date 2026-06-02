@@ -13,11 +13,13 @@
     progressCount: document.querySelector("#progress-count"),
     eta: document.querySelector("#eta"),
     daysSaved: document.querySelector("#days-saved"),
+    daysUnavailable: document.querySelector("#days-unavailable"),
     rowsSaved: document.querySelector("#rows-saved"),
     currentDay: document.querySelector("#current-day"),
     start: document.querySelector("#start"),
     resume: document.querySelector("#resume"),
     pause: document.querySelector("#pause"),
+    stop: document.querySelector("#stop"),
     openUtility: document.querySelector("#open-utility"),
     exportCsv: document.querySelector("#export-csv"),
     clearData: document.querySelector("#clear-data"),
@@ -114,6 +116,7 @@
       elements.endDate.value = job.endDate;
     }
     elements.daysSaved.textContent = String(summary?.doneDays || 0);
+    elements.daysUnavailable.textContent = String(summary?.unavailableDays || 0);
     elements.rowsSaved.textContent = String(summary?.rows || 0);
     elements.currentDay.textContent = display.showActiveProgress ? job?.currentDay || "-" : "-";
     elements.progressFill.style.width = `${progress.percent || 0}%`;
@@ -128,7 +131,9 @@
     } else if (display.isPausedNow || job?.status === "paused") {
       elements.status.textContent = summary?.lastErrorMessage || "Paused.";
     } else if (display.isCompleteNow) {
-      elements.status.textContent = "Download complete.";
+      elements.status.textContent = summary?.unavailableDays
+        ? `Download complete. Skipped ${summary.unavailableDays} unavailable day${summary.unavailableDays === 1 ? "" : "s"}.`
+        : "Download complete.";
     } else if (display.isInterrupted) {
       elements.status.textContent = "Ready. Previous download was interrupted.";
     } else if (summary?.rows) {
@@ -138,11 +143,14 @@
     }
 
     const canResume = job?.status === "paused" || display.isInterrupted;
+    const canStop = display.isRunningNow || canResume;
     elements.start.hidden = display.isRunningNow || canResume;
     elements.resume.hidden = !canResume;
     elements.pause.hidden = !display.isRunningNow;
+    elements.stop.hidden = !canStop;
     elements.resume.disabled = !canResume;
     elements.pause.disabled = !display.isRunningNow;
+    elements.stop.disabled = !canStop;
     elements.exportCsv.disabled = !summary?.rows;
   }
 
@@ -152,6 +160,8 @@
     elements.approveShare.disabled = !pending;
     elements.declineShare.disabled = !pending;
     if (pending) {
+      setError("");
+      elements.status.textContent = "Approve sharing with Off Peak Advisor.";
       elements.bridgeStatus.textContent = `Share locally stored energy interval CSV with the Time-of-Use Rate Analyzer at https://offpeakadvisor.com. This request is from ${pending.origin} for ${pending.rowCount || 0} saved intervals.`;
     } else {
       elements.bridgeStatus.textContent = "No analyzer request is waiting.";
@@ -173,17 +183,16 @@
   async function refresh() {
     try {
       if (!stickyError) setError("");
-      const [summary, bridge] = await Promise.all([
-        sendToActiveTab({ type: "ENERGY_STATUS" }).catch(error => {
-          elements.status.textContent = "Open the utility energy usage page and log in.";
-          renderStatus({ doneDays: 0, rows: 0, pageReady: false });
-          if (isMissingContentScriptError(error)) {
-            return null;
-          }
-          throw error;
-        }),
-        sendToBackground({ type: "ENERGY_BRIDGE_STATUS" })
-      ]);
+      const bridge = await sendToBackground({ type: "ENERGY_BRIDGE_STATUS" });
+      const summary = await sendToActiveTab({ type: "ENERGY_STATUS" }).catch(error => {
+        if (bridge?.pending) return null;
+        elements.status.textContent = "Open the utility energy usage page and log in.";
+        renderStatus({ doneDays: 0, rows: 0, pageReady: false });
+        if (isMissingContentScriptError(error)) {
+          return null;
+        }
+        throw error;
+      });
       if (summary) renderStatus(summary);
       renderBridgeStatus(bridge);
     } catch (error) {
@@ -220,6 +229,7 @@
 
   elements.resume.addEventListener("click", () => run(() => sendToActiveTab({ type: "ENERGY_RESUME" })));
   elements.pause.addEventListener("click", () => run(() => sendToActiveTab({ type: "ENERGY_PAUSE" })));
+  elements.stop.addEventListener("click", () => run(() => sendToActiveTab({ type: "ENERGY_STOP" })));
 
   elements.openUtility.addEventListener("click", async () => {
     await chrome.tabs.create({ url: energyUsageUrl() });
@@ -242,6 +252,7 @@
   elements.approveShare.addEventListener("click", () => run(async () => {
     await sendToBackground({ type: "ENERGY_BRIDGE_APPROVE" });
     renderBridgeStatus(await sendToBackground({ type: "ENERGY_BRIDGE_STATUS" }));
+    window.close();
     return null;
   }));
 

@@ -37,6 +37,10 @@
           <strong id="days-saved">0</strong>
         </div>
         <div class="progress-row">
+          <span>Unavailable days</span>
+          <strong id="days-unavailable">0</strong>
+        </div>
+        <div class="progress-row">
           <span>Intervals</span>
           <strong id="rows-saved">0</strong>
         </div>
@@ -48,8 +52,9 @@
 
       <section class="actions" aria-label="Download controls">
         <button id="start">Start</button>
-        <button id="resume">Resume</button>
-        <button id="pause">Pause</button>
+        <button id="resume" hidden>Resume</button>
+        <button id="pause" hidden>Pause</button>
+        <button id="stop" hidden>Stop</button>
       </section>
 
       <section class="actions secondary" aria-label="Data controls">

@@ -5,7 +5,8 @@
   const SHARE_GRANTS_KEY = "energy.share.grants";
   const GRANT_TTL_MS = 15 * 60 * 1000;
   const ALLOWED_ORIGINS = new Set([
-    "https://offpeakadvisor.com"
+    "https://offpeakadvisor.com",
+    "https://www.offpeakadvisor.com"
   ]);
   const exportApi = root.energyUsageExport || (typeof require === "function" ? require("./export.js") : null);
   if (!exportApi) {
@@ -17,6 +18,7 @@
     CSV_MIME,
     collectStoredRowsFromSnapshot,
     csvFile,
+    csvFileName,
     csvValue,
     rowsToCsv,
     sanitizeRow
@@ -61,6 +63,16 @@
     return rowCount;
   }
 
+  async function showPendingSharePrompt(chromeApi) {
+    await Promise.resolve(chromeApi.action?.setBadgeText?.({ text: "TOU" })).catch(() => undefined);
+    await Promise.resolve(chromeApi.action?.setBadgeBackgroundColor?.({ color: "#c9933a" })).catch(() => undefined);
+    await Promise.resolve(chromeApi.action?.openPopup?.()).catch(() => undefined);
+  }
+
+  async function clearPendingSharePrompt(chromeApi) {
+    await Promise.resolve(chromeApi.action?.setBadgeText?.({ text: "" })).catch(() => undefined);
+  }
+
   async function approvePendingShare(chromeApi) {
     const values = await chromeApi.storage.local.get(PENDING_SHARE_KEY);
     const pending = values[PENDING_SHARE_KEY];
@@ -75,11 +87,13 @@
     };
     await chromeApi.storage.local.set({ [SHARE_GRANTS_KEY]: grants });
     await chromeApi.storage.local.remove(PENDING_SHARE_KEY);
+    await clearPendingSharePrompt(chromeApi);
     return { ok: true, status: "approved", origin: pending.origin };
   }
 
   async function declinePendingShare(chromeApi) {
     await chromeApi.storage.local.remove(PENDING_SHARE_KEY);
+    await clearPendingSharePrompt(chromeApi);
     return { ok: true, status: "declined" };
   }
 
@@ -89,6 +103,7 @@
     let pending = values[PENDING_SHARE_KEY] || null;
     if (pending && !rows.length) {
       await chromeApi.storage.local.remove(PENDING_SHARE_KEY);
+      await clearPendingSharePrompt(chromeApi);
       pending = null;
     } else if (pending) {
       pending = { ...pending, rowCount: rows.length };
@@ -100,7 +115,7 @@
       rowCount: rows.length,
       file: rows.length
         ? {
-            name: `energy-usage-timeseries-${new Date().toISOString().slice(0, 10)}.csv`,
+            name: csvFileName ? csvFileName(rows) : `energy-usage-${new Date().toISOString().slice(0, 10)}.csv`,
             mimeType: CSV_MIME,
             rowCount: rows.length
           }
@@ -127,7 +142,12 @@
     }
 
     if (!(await hasGrant(chromeApi, origin))) {
+      const existingPending = await chromeApi.storage.local.get(PENDING_SHARE_KEY);
+      const alreadyPending = existingPending[PENDING_SHARE_KEY]?.origin === origin;
       const rowCount = await rememberPending(chromeApi, origin, rows.length);
+      if (!alreadyPending) {
+        await showPendingSharePrompt(chromeApi);
+      }
       return {
         ok: false,
         status: "approval_required",
@@ -188,6 +208,7 @@
     bridgeStatus,
     collectStoredRows,
     csvFile,
+    csvFileName,
     csvValue,
     declinePendingShare,
     handleExternalMessage,

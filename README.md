@@ -54,9 +54,9 @@ The generator writes committed README/source assets to `docs/screenshots/` and `
 
 The extension injects `src/page-hook.js` into the energy usage page at document start. That hook wraps `fetch`, `XMLHttpRequest`, and JSON parsing, watches for usage time-series payloads, and sends only minimal interval fields (`readDate`, `readTime`, and `usage`) to the isolated content script.
 
-`src/content.js` owns the resumable download state machine. It switches the page to the One Day view, sets the usage date field one day at a time, waits for the page to make its own authenticated request, normalizes the interval rows, and stores each successful day independently. If a day fails repeatedly, the job pauses and can be resumed later.
+`src/content.js` owns the resumable download state machine. It switches the page to the One Day view, sets the usage date field one day at a time, waits for the page to make its own authenticated request, normalizes the interval rows, and stores each successful day independently. If the utility reports that a date has no usage data or is outside the available range, that day is marked unavailable and the job continues. If the page itself fails repeatedly, the job pauses and can be resumed later.
 
-`src/popup.js` provides start, pause, resume, CSV export, approved analyzer sharing, and clear controls.
+`src/popup.js` provides start, pause, resume, stop, CSV export, approved analyzer sharing, and clear controls.
 
 ## License
 
@@ -71,5 +71,6 @@ The Store listing and packaged extension should include `EULA.md` as the extensi
 - Chrome/Chromium only.
 - The extension depends on the supported utility's current energy usage page and endpoint names.
 - The downloader assumes interval data is exposed through the utility's One Day usage view.
-- If the utility site is unavailable, the user session expires, or a day fails repeatedly, the job pauses and can be resumed later.
+- If an individual date is unavailable, the job skips that date and continues with the rest of the range.
+- If the utility site is unavailable, the user session expires, or a day fails repeatedly for reasons other than unavailable data, the job pauses and can be resumed later.
 - The TOU analyzer import still requires explicit approval in the extension popup.
