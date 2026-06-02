@@ -1,6 +1,6 @@
 {
   "name": "utility-energy-downloader",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
   "description": "Local-only Chrome extension for downloading meter usage time-series data from a supported electric utility account.",
