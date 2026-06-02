@@ -10,13 +10,7 @@ Local-only Chrome extension for downloading meter usage time-series data from th
 
 Use this extension only with your own authorized utility account.
 
-## Preview
-
-![Utility Energy Downloader capturing usage data on a utility energy page](docs/screenshots/01-ready-local-download.png)
-
 The popup controls a local download from the utility energy usage page and stores captured usage data in the user's browser profile.
-
-![Utility Energy Downloader approval prompt for local analyzer sharing](docs/screenshots/04-analyzer-approval.png)
 
 Sharing with the rate analyzer requires explicit approval, and the data handoff stays local in the user's browser.
 
@@ -39,16 +33,6 @@ Sharing with the rate analyzer requires explicit approval, and the data handoff 
 4. Select this repository directory.
 5. Open the supported utility's energy usage page and log in normally.
 6. Open the extension popup and start a download.
-
-## Local store artwork
-
-Generate local Chrome Web Store screenshots and promo tiles with:
-
-```sh
-npm run build:local
-```
-
-The generator writes committed README/source assets to `docs/screenshots/` and `docs/promo/`, and upload-ready Chrome Web Store copies to ignored `release/chrome-web-store/` paths. The Playwright scripts use managed Chromium by default; run `npx playwright install chromium` if the browser has not been installed yet, or set `CHROME_BIN` to use a specific Chrome/Chromium executable.
 
 ## How it works
 
